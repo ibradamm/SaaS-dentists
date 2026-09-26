@@ -1,6 +1,6 @@
 # Phase 1 — Fondations : rapport
 
-Date : 2026-09-26. Statut : **terminée côté code et tests locaux**. CI GitHub : voir la section « Vérifications ».
+Date : 2026-09-26. Statut : **code et tests locaux terminés** ; résultat de la CI GitHub consigné ci-dessous après exécution.
 
 ## Livré
 
@@ -62,6 +62,7 @@ Couverture des tests d'intégration :
 - **Somme de contrôle de gitleaks** : lue depuis la même release que le binaire. Elle protège contre la corruption, pas contre une release compromise. Figer l'empreinte SHA-256 dans le workflow est à faire.
 - **Vulnérabilité modérée** dans esbuild ≤ 0.24.2 : dépendance de développement via drizzle-kit, concerne uniquement le serveur de développement d'esbuild, que drizzle-kit n'utilise pas. Non corrigée pour ne pas casser drizzle-kit ; à surveiller.
 - **Taille du bundle web** : 300 ko (92 ko gzip), à cause de Zod complet. Optimisation à envisager en Phase 8.
+- **Mots de passe des rôles communs au cluster** : le bootstrap les réaffirme. Des tests lancés avec d'autres mots de passe modifient donc ceux de la base de développement du même cluster (constaté pendant la vérification). Sans effet en CI (cluster jetable) ; à revoir si un cluster est partagé entre développeurs.
 - **TLS vers PostgreSQL en production** : non imposé pour l'instant, décision en Phase 13 selon l'hébergement.
 
 ## Reste à faire (phases suivantes)

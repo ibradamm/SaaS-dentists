@@ -36,6 +36,7 @@ pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build
 
 - Les tests d'intégration créent une base jetable, y appliquent toutes les migrations et se connectent avec le rôle applicatif réel (RLS active).
 - Ils ont besoin de `TEST_DATABASE_ADMIN_URL`, `DATABASE_OWNER_PASSWORD` et `DATABASE_APP_PASSWORD`, lus depuis `.env`.
+- Attention : les rôles PostgreSQL sont communs à tout le cluster. Le bootstrap (y compris celui des tests) réaffirme leurs mots de passe. Lancer les tests avec d'autres mots de passe que ceux du `.env` modifie donc aussi ceux de la base de développement du même cluster.
 
 ## Structure
 

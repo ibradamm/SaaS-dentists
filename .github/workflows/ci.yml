@@ -89,8 +89,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
+      # Pas de cache pnpm : ce job n'installe rien (l'audit lit le lockfile), et un cache
+      # sans magasin pnpm fait échouer l'étape de sauvegarde de setup-node.
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
-          cache: pnpm
       - run: pnpm audit --prod --audit-level high
