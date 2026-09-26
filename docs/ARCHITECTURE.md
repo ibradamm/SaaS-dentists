@@ -4,6 +4,20 @@
 > Date : 2026-09-26. Toute information marquée **[À VÉRIFIER]** n'a pas pu être confirmée
 > sur la documentation officielle depuis l'environnement de développement (accès réseau restreint).
 
+### Révision 1 (2026-09-26) — relecture critique et vérifications
+
+| Point | Résultat |
+|---|---|
+| Environnement (section 0.2) | Revérifié : conforme (Docker sans daemon, Redis 7.0, PostgreSQL 16 serveur, Chromium Playwright ; Meta bloqué ; `developers.google.com` également bloqué) |
+| Modèles et tarifs Claude | Confirmés (référence Anthropic du 2026-06-24). Ajout de Claude Opus 5.5 comme option (N.2) |
+| Tarification WhatsApp au 1er octobre 2026 | Confirmée par plusieurs sources secondaires concordantes ; page officielle Meta toujours inaccessible **[À VÉRIFIER]** |
+| Politique Meta sur les chatbots IA | Confirmée : bots dédiés à un processus (prise de rendez-vous) autorisés |
+| Quotas Google Calendar 2026 | Confirmés par sources secondaires citant la page officielle |
+| Paquets npm | Versions et licences vérifiées sur le registre npm (L) ; pg-boss 12 documente la création de jobs dans une transaction existante, y compris via Drizzle |
+| **Correction H.3** | Le calendrier miroir ne doit **pas** appartenir au compte de service : Google déconseille explicitement un compte de service comme propriétaire d'un calendrier secondaire. Il appartient désormais à un compte Google du cabinet et est partagé avec le compte de service |
+| **Ajout L / M13 / O1** | La politique WhatsApp Business interdit d'envoyer ou de demander des informations de santé **si la réglementation applicable l'interdit** sur des systèmes ne répondant pas à des exigences renforcées. Question juridique avancée : elle bloque désormais la Phase 6, pas seulement la production |
+| Ajouts | Table `messaging_channels` (routage des webhooks vers le bon cabinet), verrou par praticien étendu aux blocages, gestion du `refusal` et des fallbacks côté API Claude, observabilité (A.5), environnements (A.6), durées de conservation proposées (J.2) |
+
 ---
 
 ## 0. Constat de départ
@@ -20,7 +34,7 @@
 | Redis 7 | disponible | Non nécessaire au MVP (voir B) |
 | Docker | client présent, **pas de daemon** | `docker compose` fourni pour votre machine, mais non exécutable ici |
 | Chromium + Playwright | disponibles | Tests E2E de l'interface possibles |
-| Réseau sortant | npm/PyPI OK ; `api.anthropic.com` joignable ; `www.googleapis.com` joignable ; **`graph.facebook.com` et `developers.facebook.com` bloqués** | L'intégration WhatsApp réelle **ne peut pas être vérifiée depuis cet environnement** : elle le sera sur un environnement de staging avec vos identifiants |
+| Réseau sortant | npm/PyPI OK ; `api.anthropic.com` joignable ; `www.googleapis.com` joignable ; **`graph.facebook.com`, `developers.facebook.com` et `developers.google.com` bloqués** | L'intégration WhatsApp réelle **ne peut pas être vérifiée depuis cet environnement** : elle le sera sur un environnement de staging avec vos identifiants |
 | Secrets | aucune clé Anthropic/Google/Meta configurée | Les intégrations réelles nécessiteront des identifiants de test fournis par vous |
 
 ---
@@ -101,6 +115,20 @@ Règle : les outils de l'agent et les routes HTTP appellent **les mêmes service
 | Santé | `GET /health/live`, `GET /health/ready` |
 
 Contrats d'entrée/sortie définis en **Zod** dans un paquet partagé, utilisés à la fois pour la validation serveur et le typage du frontend.
+
+### A.5 Observabilité
+
+| Besoin | Mécanisme |
+|---|---|
+| Logs structurés | pino (JSON), un `request_id` propagé de la requête HTTP aux jobs qu'elle crée ; champs sensibles masqués à la source |
+| Métriques | Endpoint `/metrics` (format Prometheus, `prom-client`) exposé uniquement sur le réseau interne : latence HTTP, profondeur et échecs des files de jobs, âge de la dernière synchro Google, échecs d'envoi WhatsApp, runs d'agent par issue (REPLIED/HANDOFF/ERROR/LIMIT), tokens consommés |
+| Erreurs | Service de suivi d'erreurs compatible Sentry (hébergé en UE ou auto-hébergé, par ex. GlitchTip), avec suppression des données personnelles avant envoi |
+| Traçabilité de l'agent | `agent_runs` + `agent_tool_calls` en base, consultables par l'ADMIN : pour chaque réponse envoyée, on retrouve l'intention détectée, les outils appelés, leurs entrées/sorties masquées et le résultat |
+| Alertes métier | Bandeaux dans l'application (synchro Google en retard, messages WhatsApp en échec, handoffs urgents non pris en charge) |
+
+### A.6 Environnements
+
+`APP_ENV` ∈ `development`, `test`, `staging`, `production`. La configuration est lue une seule fois au démarrage et validée par un schéma Zod : une variable manquante ou invalide empêche le démarrage. `test` utilise une base créée puis détruite à chaque exécution et des fakes pour toutes les intégrations externes. `staging` sert aux tests réels (numéro de test Meta, calendrier de test, clé Anthropic dédiée) et ne contient jamais de données patients réelles.
 
 ---
 
@@ -209,7 +237,7 @@ Correspondance avec la structure conceptuelle demandée : `backend/` → `apps/s
 - Identifiants **UUID v7** (ordonnés dans le temps, bons pour les index), générés par l'application.
 - Toutes les tables métier : `clinic_id NOT NULL`, `created_at`, `updated_at` (timestamptz).
 - **Clés étrangères composites** `(clinic_id, x_id) → x(clinic_id, id)` : un rendez-vous ne peut physiquement pas référencer un patient d'un autre cabinet.
-- **RLS** activée sur toutes les tables métier : politique `clinic_id = current_setting('app.clinic_id')::uuid`. Le rôle applicatif n'est ni propriétaire des tables ni `BYPASSRLS` ; les migrations utilisent un rôle distinct.
+- **RLS** activée sur toutes les tables métier : politique `clinic_id = current_setting('app.clinic_id')::uuid`. Le rôle applicatif n'est ni propriétaire des tables ni `BYPASSRLS` ; les migrations utilisent un rôle distinct. Les jobs système qui concernent tous les cabinets (expiration des holds, rappels, réconciliation) itèrent sur les cabinets et traitent chacun dans son propre contexte `withTenant` ; aucun job ne contourne la RLS. Seules deux résolutions précèdent le contexte cabinet : `phone_number_id` → cabinet (webhook WhatsApp) et canal Google → cabinet. Elles passent par des fonctions SQL dédiées qui ne renvoient qu'un `clinic_id`.
 - Horodatages en **UTC** (`timestamptz`) ; le fuseau IANA du cabinet sert au calcul des disponibilités et à l'affichage.
 - Montants en **entiers (centimes)** + code devise ISO 4217. Jamais de flottants.
 - Suppression logique (`archived_at`) pour patients et utilisateurs ; les suppressions physiques sont réservées aux demandes d'effacement légales (procédure documentée).
@@ -250,6 +278,8 @@ ALTER TABLE appointments ADD CONSTRAINT appointments_no_overlap
 
 Une contrainte ne peut pas dépendre de `now()` : les holds expirés sont donc passés à `EXPIRED` (a) par un job chaque minute et (b) dans la transaction de réservation elle-même, avant l'insertion, pour la plage concernée.
 
+Les blocages (`availability_blocks`) ne font pas partie de la contrainte : le personnel doit pouvoir placer volontairement un rendez-vous sur une plage bloquée. La cohérence est garantie par un **verrou consultatif transactionnel par praticien** (`pg_advisory_xact_lock`) pris à la fois par la création de rendez-vous, de hold et de blocage. Un hold de l'agent et un blocage posé simultanément par la secrétaire sont donc sérialisés : le second voit le premier et réagit (l'agent revalide les blocages, la création du blocage liste le conflit).
+
 **Synchronisation calendrier**
 | Table | Colonnes clés |
 |---|---|
@@ -277,6 +307,7 @@ Une contrainte ne peut pas dépendre de `now()` : les holds expirés sont donc p
 | `conversations` | id, clinic_id, channel, contact_phone_e164, active_patient_id, mode (BOT/HUMAN/CLOSED), assigned_user_id, last_inbound_at, agent_state (jsonb), version | `last_inbound_at` détermine la fenêtre de 24 h WhatsApp |
 | `messages` | id, clinic_id, conversation_id, direction (IN/OUT), author_type (PATIENT/AGENT/STAFF/SYSTEM), author_user_id, provider_message_id (unique), kind (TEXT/INTERACTIVE/TEMPLATE/MEDIA), body, payload, status (RECEIVED/QUEUED/SENT/DELIVERED/READ/FAILED), error_code | Les statuts ne peuvent qu'avancer (webhooks désordonnés) |
 | `handoffs` | id, clinic_id, conversation_id, reason, urgency (NORMAL/HIGH), summary, status (OPEN/IN_PROGRESS/RESOLVED), taken_by, resolved_at | |
+| `messaging_channels` | id, clinic_id, provider (WHATSAPP_CLOUD), phone_number_id (unique global), waba_id, display_phone, status | Routage des webhooks : Meta envoie le `phone_number_id` destinataire ; il désigne le cabinet **avant** tout traitement. Numéro inconnu → événement rejeté et journalisé |
 | `whatsapp_templates` | id, clinic_id, name, language, category, provider_status | |
 | `webhook_events` | id, provider, external_id (unique), received_at, signature_valid, payload (rétention courte), processed_at, error | Idempotence : Meta peut livrer deux fois le même webhook |
 
@@ -358,7 +389,8 @@ Pourquoi un routeur séparé plutôt qu'une seule boucle : l'urgence et les dema
 ### E.6 Résilience
 - API Claude indisponible ou lente (timeout 30 s, 2 tentatives) → message fixe « notre assistant est momentanément indisponible, l'équipe vous répondra » + handoff. Jamais de réponse inventée.
 - Plafonds de coût : nombre maximal d'appels LLM par conversation et par jour ; dépassement → handoff.
-- `stop_reason: "refusal"` traité explicitement → handoff.
+- `stop_reason: "refusal"` traité explicitement : le fallback serveur de l'API Claude est activé (`fallbacks: "default"`, bêta `server-side-fallback-2026-07-01`) ; si la réponse reste un refus → handoff. `stop_reason: "max_tokens"` → la réponse n'est pas envoyée, handoff.
+- Le routeur utilise les **sorties structurées** (`output_config.format`) et non un `tool_choice` forcé : le forçage d'outil est refusé (erreur 400) par Claude Opus 5.5 et Fable 5.1. Ce choix évite de bloquer un changement de modèle ultérieur.
 
 ---
 
@@ -399,7 +431,7 @@ Règles communes à tous les outils :
 ### G.1 Réception
 1. Meta appelle `POST /webhooks/whatsapp`.
 2. Vérification de la signature `X-Hub-Signature-256` (HMAC-SHA256 du corps brut avec l'App Secret). Signature invalide → 401, rien n'est traité.
-3. Déduplication par identifiant de message Meta (`webhook_events.external_id` unique).
+3. Résolution du cabinet par `phone_number_id` (`messaging_channels`), puis déduplication par identifiant de message Meta (`webhook_events.external_id` unique). Un même webhook peut contenir plusieurs messages ou statuts : chacun est dédupliqué individuellement.
 4. Enregistrement du message, mise à jour de `last_inbound_at`, mise en file du job `conversation.process` (clé de singleton = conversation, délai 4 s).
 5. Réponse `200` immédiate.
 6. Webhooks de statut (sent/delivered/read/failed) → mise à jour monotone de `messages.status`.
@@ -438,7 +470,7 @@ Patient : clique [Confirmer]
 | Patient hors fenêtre de 24 h | Seuls les templates approuvés peuvent être envoyés ; l'interface l'impose |
 
 ### G.4 Rappels
-Job planifié à J-1 (configurable), uniquement si `whatsapp_opt_in_at` est renseigné. Message **template de catégorie utility** (hors fenêtre de 24 h) avec boutons [Je confirme] [Annuler / déplacer].
+Job planifié à J-1 (configurable), uniquement si `whatsapp_opt_in_at` est renseigné. Message **template de catégorie utility** (hors fenêtre de 24 h) avec boutons [Je confirme] [Annuler / déplacer]. Le template contient la date, l'heure et le nom du cabinet, **jamais le type de soin** (minimisation, risque M13).
 
 ---
 
@@ -466,7 +498,7 @@ Blocage d'un créneau déjà occupé : l'interface liste les rendez-vous en conf
 |---|---|
 | Source de vérité | **PostgreSQL**, pour les rendez-vous comme pour les blocages créés dans l'application |
 | Rôle de Google Calendar | (1) **Miroir** en lecture des rendez-vous, visible par dentiste et secrétaire ; (2) **optionnel** : calendrier « Indisponibilités » du dentiste importé comme blocages |
-| Calendrier miroir | Créé et possédé par le compte de service ; partagé en **lecture seule** avec le personnel. Les modifications manuelles y sont donc impossibles |
+| Calendrier miroir | **Possédé par un compte Google du cabinet** (compte dédié, par ex. `agenda.cabinet@…`), partagé avec le compte de service en « Modifier les événements » et avec le personnel en **lecture seule**. *Correction de la révision 1* : Google déconseille un compte de service comme propriétaire d'un calendrier secondaire (comportements imprévus, suppression impossible par un tiers). Un calendrier partagé n'apparaît pas automatiquement dans la liste du compte de service : il faut l'ajouter par `calendarList.insert` (Phase 5). Le propriétaire garde techniquement un droit d'écriture ; ses modifications manuelles sont traitées comme des divergences (ligne « Conflits ») |
 | Idempotence | L'identifiant d'événement Google est dérivé de l'UUID du rendez-vous (Google accepte des identifiants fournis par le client en base32hex ; les caractères hexadécimaux sont inclus) → recréer deux fois ne duplique pas |
 | Contenu des événements | Minimal par défaut (ex. « RDV – Karim B. – Détartrage »), jamais de motif médical ; niveau de détail à décider (question O6) |
 | Conflits | La base gagne toujours. Si un événement miroir diverge (modification par un tiers disposant de droits d'écriture), il est réécrit depuis la base et un avertissement est journalisé |
@@ -532,6 +564,20 @@ Le rôle PATIENT (portail patient) est prévu dans le modèle (principal distinc
 | Dépendances | Lockfile, `pnpm audit` en CI, mises à jour régulières |
 | Audit | Connexions (succès/échec), modifications patient, création/annulation/déplacement de RDV, paiements et annulations de paiement, changements de rôle, paramètres, prise/rendu de conversation |
 
+### J.2 Durées de conservation (proposition technique, **à valider juridiquement**)
+
+Chaque durée est un paramètre du cabinet appliqué par un job de purge journalisé. Les valeurs ci-dessous sont des hypothèses de départ, pas des obligations vérifiées : elles dépendent du pays (question O1).
+
+| Donnée | Proposition | Justification technique |
+|---|---|---|
+| Charge brute des webhooks (`webhook_events.payload`) | 7 jours | Utile seulement au diagnostic ; l'information utile est déjà extraite |
+| Contenu des messages WhatsApp | 12 mois après le dernier échange | Reprise de contexte par la secrétaire ; au-delà, seules les métadonnées sont conservées |
+| Entrées/sorties des outils de l'agent | 90 jours | Débogage et évaluation ; `agent_runs` agrégé conservé plus longtemps sans contenu |
+| Journaux applicatifs | 30 jours | Exploitation |
+| `audit_logs` | Durée à fixer avec le juriste (souvent plusieurs années) | Preuve des accès aux données |
+| Paiements | Durée légale comptable du pays (10 ans en France pour les pièces comptables, à confirmer selon le pays) | Obligation comptable |
+| Patients sans rendez-vous ni paiement depuis N années | Archivage puis effacement selon la règle retenue | Minimisation |
+
 ---
 
 ## K. Plan de développement par phases
@@ -569,7 +615,31 @@ Deux ajustements recommandés à l'ordre initial :
 | **Google Calendar API v3** | Miroir + import d'indisponibilités | Compte de service (clé JSON en secret) | Projets créés après le 1er mai 2026 : 10 000 req/min/projet, 600 req/min/utilisateur, seuil de facturation à 1 000 000 req/jour (facturation détaillée annoncée pour fin 2026 avec 90 jours de préavis) ; canaux push à expiration sans renouvellement automatique ; endpoint HTTPS valide requis | Sources secondaires + extraits de la doc officielle ; exigences exactes du webhook push **[À VÉRIFIER]** en Phase 5 |
 | **API Claude** (Anthropic) | Routeur + agent | Clé API (secret) | Rate limits selon le palier du compte ; traitement de données personnelles de santé par un sous-traitant → DPA et options de rétention/résidence à vérifier pour votre compte | Modèles et tarifs vérifiés (référence au 2026-06-24) |
 | Hébergeur | API, worker, PostgreSQL managé, sauvegardes | — | **Si le cabinet est en France : hébergement certifié HDS obligatoire** pour des données de santé | Dépend du pays (O1) |
-| Paquets npm | Fastify, Drizzle, pg-boss, Zod, React, Vite, TanStack Query, FullCalendar, shadcn/ui, Recharts, Luxon, argon2, pino, libphonenumber-js, Vitest, Playwright | — | Licences à contrôler (toutes MIT/Apache à ma connaissance ; FullCalendar : uniquement les paquets MIT, pas les plugins premium) | Versions vérifiées à l'installation |
+| **Politique WhatsApp Business (santé)** | — | — | La politique de messagerie interdit l'usage pour la télémédecine ou pour envoyer ou demander des informations de santé **si la réglementation applicable interdit** leur transmission à des systèmes ne répondant pas à des exigences renforcées. Elle interdit aussi de demander des numéros d'identité ou de carte bancaire complets. Même un rendez-vous chez un dentiste rattaché à une personne nommée peut constituer une donnée de santé au sens du RGPD. | Source officielle (business.whatsapp.com/policy) citée par plusieurs sources ; texte intégral **[À VÉRIFIER]** — accès bloqué depuis l'environnement |
+| Paquets npm | Voir tableau ci-dessous | — | — | **Vérifié sur le registre npm le 2026-09-26** |
+
+Versions actuelles et licences (vérifiées sur le registre npm ; seront figées dans le lockfile à l'installation) :
+
+| Paquet | Version | Licence | Remarque |
+|---|---|---|---|
+| fastify | 5.12.5 | MIT | |
+| zod | 4.6.5 | MIT | |
+| drizzle-orm / drizzle-kit | 0.45.3 / 0.31.11 | Apache-2.0 / MIT | |
+| pg-boss | 12.35.0 | MIT | Exige Node ≥ 22.12 (environnement : 22.22 ✓) ; le README documente la création de jobs dans une transaction existante, avec adaptateur Drizzle |
+| pg | 8.23.0 | MIT | |
+| @node-rs/argon2 | 2.2.1 | MIT | Binaire précompilé (préféré à `argon2`, qui compile du natif) |
+| otplib | 13.5.0 | MIT | TOTP |
+| @fastify/helmet, rate-limit, cookie | 13.1.1, 11.2.0, 11.1.2 | MIT | |
+| react / vite / react-router | 19.3.0 / 8.3.1 / 8.4.0 | MIT | |
+| @tanstack/react-query | 5.104.0 | MIT | |
+| tailwindcss | 4.3.3 | MIT | |
+| @fullcalendar/timegrid, interaction | 6.1.21 | MIT | `@fullcalendar/core` est déjà en 7.1.0 alors que les plugins restent en 6.x (7.0 en RC) : alignement des versions à trancher en Phase 4. Les paquets `resource-*` sont sous licence commerciale → non utilisés |
+| recharts | 3.10.1 | MIT | |
+| luxon / libphonenumber-js | 3.7.2 / 1.13.14 | MIT | |
+| pino | 10.3.1 | MIT | |
+| @anthropic-ai/sdk | 0.128.0 | MIT | |
+| @googleapis/calendar | 20.0.1 | Apache-2.0 | Client Calendar seul, plus léger que `googleapis` |
+| vitest / @playwright/test | 5.0.2 / 1.63.0 | MIT / Apache-2.0 | |
 | E-mail transactionnel | Réinitialisation de mot de passe | — | **Évitable au MVP** : réinitialisation par l'administrateur | — |
 
 MCP : **aucun MCP n'est nécessaire au produit.** Les intégrations directes par API sont plus simples à contrôler, tester et sécuriser. Côté développement, les outils déjà disponibles (GitHub) suffisent.
@@ -592,7 +662,7 @@ MCP : **aucun MCP n'est nécessaire au produit.** Les intégrations directes par
 | 10 | Divergence base ↔ Google Calendar | Moyenne / faible | Base = vérité ; réconciliation nocturne ; alertes |
 | 11 | Indisponibilité de l'API Claude | Faible / moyen | Timeout, retry, message fixe + handoff |
 | 12 | Dérive des coûts LLM | Moyenne / moyen | Suivi des tokens par run ; plafonds ; cache de prompt ; choix du modèle par évaluation |
-| 13 | Non-conformité données de santé (transferts hors UE vers Meta, Google, Anthropic) | Moyenne / très élevé | Minimisation (pas de motif médical dans Google, messages sobres), DPA, hébergement adapté, **avis juridique avant production** |
+| 13 | Non-conformité données de santé (transferts hors UE vers Meta, Google, Anthropic ; clause santé de la politique WhatsApp) | Moyenne / très élevé — **peut remettre en cause le canal WhatsApp lui-même** selon le pays | Minimisation : l'agent ne sollicite jamais de symptômes détaillés, types de soins génériques, aucun type de soin dans les rappels, rien de médical dans Google ; DPA ; hébergement adapté ; **avis juridique avant la Phase 6** (et non seulement avant la production), car une réponse négative change le produit |
 | 14 | Perte de données | Faible / très élevé | PITR, sauvegardes hors site chiffrées, tests de restauration |
 | 15 | Périmètre qui dérive vers un logiciel métier dentaire complet | Élevée / élevé | Périmètre MVP explicite ; clarification O3 |
 | 16 | Intégrations non vérifiables depuis l'environnement de dev (Meta bloqué) | Certaine / moyen | Fakes + tests de contrat ici ; tests réels sur staging avec vos identifiants avant de déclarer l'intégration fonctionnelle |
@@ -615,10 +685,11 @@ Ordres de grandeur, **hors hébergement de production et hors développement**. 
 | Modèle | Entrée | Sortie | Coût estimé / conversation de réservation* | ~400 conversations/mois* |
 |---|---|---|---|---|
 | `claude-opus-5` (par défaut) | 5 $ | 25 $ | 0,30 – 0,50 $ | 120 – 200 $ |
+| `claude-opus-5-5` (option ; « en lancement » dans la référence du 2026-06-24, disponibilité sur votre compte à confirmer) | 4 $ | 20 $ | 0,24 – 0,40 $ | 95 – 160 $ |
 | `claude-sonnet-5` | 2 $ | 10 $ | 0,12 – 0,20 $ | 50 – 80 $ |
 | `claude-haiku-4-5` | 1 $ | 5 $ | 0,06 – 0,10 $ | 25 – 40 $ |
 
-\* Estimation à ±50 % : ~5 tours patient, ~2 appels LLM par tour + routeur, ~5 000 tokens de préfixe stable (lectures en cache à ~0,1× le prix d'entrée), ~3 000 tokens de contexte variable, ~600 tokens de sortie par appel. Les réponses espacées de plus de 5 minutes ne bénéficient pas du cache. **Ces chiffres seront remplacés par des mesures réelles** (tokens journalisés par run) en Phase 7. Le choix d'un modèle moins cher vous revient, sur la base de la suite d'évaluation.
+\* Estimation à ±50 % : ~5 tours patient, ~2 appels LLM par tour + routeur, ~5 000 tokens de préfixe stable (lectures en cache à ~0,1× le prix d'entrée), ~3 000 tokens de contexte variable, ~600 tokens de sortie par appel. Les réponses espacées de plus de 5 minutes ne bénéficient pas du cache par défaut ; une durée de cache d'1 h existe (écriture plus chère), son intérêt sera mesuré. Claude Opus 5.5 diffère d'Opus 5 sur plusieurs points d'API (réflexion non désactivable, effort par défaut `medium`, forçage d'outil refusé) : il ne sera retenu qu'après passage de la même suite d'évaluation. **Ces chiffres seront remplacés par des mesures réelles** (tokens journalisés par run) en Phase 7. Le choix d'un modèle moins cher vous revient, sur la base de la suite d'évaluation.
 
 ### N.3 Google Calendar API
 Gratuit dans les quotas actuels ; volume attendu très inférieur au seuil de 1 000 000 requêtes/jour. Pas besoin de Google Workspace avec un compte de service. Évolution de facturation annoncée pour fin 2026 **[À SURVEILLER]**.
@@ -641,11 +712,11 @@ Classées selon la phase qu'elles bloquent. **Seule la question 0 bloque la Phas
 | # | Question | Bloque | Pourquoi | Hypothèse par défaut si pas de réponse |
 |---|---|---|---|---|
 | 0 | Validez-vous l'architecture et la stack (A, B, C) ? | Phase 1 | Tout le code en dépend | — |
-| 1 | **Pays du cabinet** ? | Phases 6, 7, 13 | Loi applicable (RGPD, loi 09-08…), hébergement HDS obligatoire en France, numéro d'urgence, format téléphone, devise, tarifs WhatsApp | Aucune : nécessaire avant la mise en production |
+| 1 | **Pays du cabinet** ? Et : acceptez-vous de consulter un juriste sur l'usage de WhatsApp pour des échanges patients **avant la Phase 6** ? | Phases 6, 7, 13 | Loi applicable (RGPD, loi 09-08…), hébergement HDS obligatoire en France, clause santé de la politique WhatsApp (L), numéro d'urgence, format téléphone, devise, tarifs WhatsApp | Aucune pour la production. Les phases 1 à 5 n'en dépendent pas |
 | 2 | **Langues des patients** (français seul ? arabe/darija ? autre ?) | Phase 7 | Prompts, templates WhatsApp (approuvés par langue), tests | Français uniquement |
 | 3 | Le cabinet utilise-t-il déjà un **logiciel métier dentaire** (dossier clinique, facturation, télétransmission) ? | Phases 3 et 10 | Évite de dupliquer le dossier médical et la facturation ; détermine si « finances » = suivi interne ou facturation légale | Pas de dossier clinique au MVP (notes restreintes seulement) ; finances = suivi interne des encaissements, **pas** de facturation légale |
 | 4 | Nombre de **praticiens** et de **fauteuils/salles** ; un rendez-vous mobilise-t-il un fauteuil ou un(e) assistant(e) ? | Phase 4 | Modèle de ressources de la contrainte anti double réservation | Ressource = praticien ; pas de gestion de fauteuils |
-| 5 | Le dentiste utilise-t-il déjà **Google Calendar** (compte Gmail ou Workspace) et contient-il des rendez-vous existants à reprendre ? | Phase 5 | Import initial, choix du calendrier d'indisponibilités | Nouveau calendrier miroir ; pas de reprise d'historique |
+| 5 | Le dentiste utilise-t-il déjà **Google Calendar** (compte Gmail ou Workspace) et contient-il des rendez-vous existants à reprendre ? Le cabinet peut-il créer un compte Google dédié, propriétaire du calendrier miroir ? | Phase 5 | Import initial, choix du calendrier d'indisponibilités, propriétaire du miroir (H.3) | Compte Google dédié du cabinet ; nouveau calendrier miroir ; pas de reprise d'historique |
 | 6 | Niveau de détail acceptable dans les événements Google (nom complet, prénom + initiale, référence seule) ? | Phase 5 | Minimisation des données de santé chez un tiers | Prénom + initiale + type de soin |
 | 7 | Disposez-vous d'un **numéro dédié** non utilisé sur l'application WhatsApp, et pouvez-vous faire vérifier l'entreprise par Meta ? | Phase 6 | Délai d'onboarding Meta indépendant du code | À démarrer maintenant |
 | 8 | Règles du cabinet : délai minimal d'annulation/déplacement par WhatsApp, horizon de réservation, types de soins réservables par l'agent (1re consultation ? urgence ?), texte et numéro d'urgence | Phases 4 et 7 | Paramètres métier des outils de l'agent | Annulation ≥ 24 h, horizon 60 jours, seuls contrôle et détartrage réservables, urgences → humain |
@@ -656,3 +727,15 @@ Classées selon la phase qu'elles bloquent. **Seule la question 0 bloque la Phas
 
 ## Annexe — Périmètre explicitement hors MVP
 Portail patient, documents et radiographies, dépenses et comptabilité, facturation légale et télétransmission, odontogramme, interface d'onboarding multi-cabinets (l'architecture la supporte, l'onboarding sera manuel), réinitialisation de mot de passe en libre-service, canal SMS de secours.
+
+## Annexe — Sources consultées lors de la révision 1 (2026-09-26)
+
+Les pages officielles de Meta et de Google sont bloquées depuis l'environnement de développement. Les points suivants reposent donc sur des sources secondaires concordantes, qui citent la documentation officielle. Chacun sera revérifié sur la source officielle dans la phase concernée.
+
+- Tarification WhatsApp au 1er octobre 2026 : [Courier](https://www.courier.com/blog/whatsapp-pricing-changes-october-2026), [respond.io](https://respond.io/blog/whatsapp-pricing-change-2026), [EngageLab](https://www.engagelab.com/blog/whatsapp-business-api-pricing) ; page officielle : [Meta for Developers — Pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing)
+- Politique Meta sur les chatbots IA généralistes : [respond.io](https://respond.io/blog/whatsapp-general-purpose-chatbots-ban), [TechCrunch](https://techcrunch.com/2025/10/18/whatssapp-changes-its-terms-to-bar-general-purpose-chatbots-from-its-platform/)
+- Politique de messagerie WhatsApp Business (clause santé) : [business.whatsapp.com/policy](https://business.whatsapp.com/policy)
+- Quotas Google Calendar : [Google — Usage limits](https://developers.google.com/workspace/calendar/api/guides/quota), [Nylas](https://cli.nylas.com/guides/google-calendar-api-quotas)
+- Propriété des calendriers secondaires et comptes de service : [Google — Calendar sharing](https://developers.google.com/workspace/calendar/api/concepts/sharing), [Issue tracker 148804709](https://issuetracker.google.com/issues/148804709)
+- Modèles et tarifs Claude : référence Anthropic intégrée à l'outillage (mise à jour du 2026-06-24)
+- Paquets npm : `npm view <paquet> version license` sur registry.npmjs.org
