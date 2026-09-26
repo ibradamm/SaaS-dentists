@@ -23,3 +23,17 @@ export const RESTRICTION_PATHS: Record<SessionRestriction, string> = {
 export function pathAfterLogin(restriction: SessionRestriction | null): string {
   return restriction ? RESTRICTION_PATHS[restriction] : '/';
 }
+
+/**
+ * Peut-on modifier l'agenda de ce praticien ? Même règle que le serveur (qui décide) :
+ * tout agenda avec schedule.manage_any, sinon seulement le praticien lié à son compte.
+ */
+export function canManageSchedule(
+  me: MeResponse | null | undefined,
+  practitioner: { userId: string | null } | null,
+): boolean {
+  if (can(me, 'schedule.manage_any')) return true;
+  return (
+    practitioner !== null && practitioner.userId === me?.user.id && can(me, 'schedule.manage_own')
+  );
+}

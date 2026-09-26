@@ -7,6 +7,11 @@ import { UsersPage } from '../pages/UsersPage';
 import { NewPatientPage } from '../pages/patients/NewPatientPage';
 import { PatientPage } from '../pages/patients/PatientPage';
 import { PatientsPage } from '../pages/patients/PatientsPage';
+import { AvailabilityPage } from '../pages/availability/AvailabilityPage';
+import { AppointmentTypesPage } from '../pages/settings/AppointmentTypesPage';
+import { ClinicProfilePage } from '../pages/settings/ClinicProfilePage';
+import { PractitionersPage } from '../pages/settings/PractitionersPage';
+import { SettingsLayout } from '../pages/settings/SettingsLayout';
 import { AppLayout } from './AppLayout';
 import { RequirePermission, RequireSession } from './guards';
 
@@ -51,6 +56,24 @@ export const routes: RouteObject[] = [
           {
             element: <RequirePermission permission="patient.write" />,
             children: [{ path: '/patients/nouveau', element: <NewPatientPage /> }],
+          },
+          {
+            element: <RequirePermission permission="appointment.read" />,
+            children: [{ path: '/disponibilites', element: <AvailabilityPage /> }],
+          },
+          {
+            element: <RequirePermission permission="clinic.settings.manage" />,
+            children: [
+              {
+                path: '/cabinet',
+                element: <SettingsLayout />,
+                children: [
+                  { index: true, element: <ClinicProfilePage /> },
+                  { path: 'praticiens', element: <PractitionersPage /> },
+                  { path: 'types-de-rendez-vous', element: <AppointmentTypesPage /> },
+                ],
+              },
+            ],
           },
           {
             element: <RequirePermission permission="data.import" />,

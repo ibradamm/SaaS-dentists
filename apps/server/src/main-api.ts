@@ -9,6 +9,8 @@ import { createAuthService } from './modules/auth/auth.service';
 import { createClinicService } from './modules/clinic/clinic.service';
 import { createImportsService } from './modules/imports/imports.service';
 import { createPatientsService } from './modules/patients/patients.service';
+import { createPractitionersService } from './modules/scheduling/practitioners.service';
+import { createSchedulesService } from './modules/scheduling/schedules.service';
 import { createUsersService } from './modules/users/users.service';
 
 const config = loadApiConfig();
@@ -36,6 +38,8 @@ try {
     clinic: createClinicService({ db }),
     patients: createPatientsService({ db, secretBox }),
     imports: createImportsService({ db }),
+    practitioners: createPractitionersService({ db }),
+    schedules: createSchedulesService({ db }),
     webOrigin: config.WEB_ORIGIN,
     secureCookies: config.SECURE_COOKIES,
   });

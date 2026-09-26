@@ -11,3 +11,10 @@ export function authorize(actor: UserActor, permission: Permission): void {
     throw new AppError('FORBIDDEN', "Vous n'avez pas les droits pour cette action", 403);
   }
 }
+
+/** Au moins une des permissions (ex. gérer son propre agenda ou celui de tout praticien). */
+export function authorizeAny(actor: UserActor, permissions: readonly Permission[]): void {
+  if (!permissions.some((p) => roleHasPermission(actor.role, p))) {
+    throw new AppError('FORBIDDEN', "Vous n'avez pas les droits pour cette action", 403);
+  }
+}

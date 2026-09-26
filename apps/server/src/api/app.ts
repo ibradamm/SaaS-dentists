@@ -9,6 +9,8 @@ import type { AuthService } from '../modules/auth/auth.service';
 import type { ClinicService } from '../modules/clinic/clinic.service';
 import type { ImportsService } from '../modules/imports/imports.service';
 import type { PatientsService } from '../modules/patients/patients.service';
+import type { PractitionersService } from '../modules/scheduling/practitioners.service';
+import type { SchedulesService } from '../modules/scheduling/schedules.service';
 import type { UsersService } from '../modules/users/users.service';
 import { registerAuth } from './auth-plugin';
 import { errorHandler, notFoundHandler } from './error-handler';
@@ -16,6 +18,7 @@ import { authRoutes } from './routes/auth';
 import { clinicRoutes } from './routes/clinic';
 import { healthRoutes } from './routes/health';
 import { importsRoutes } from './routes/imports';
+import { schedulingRoutes } from './routes/scheduling';
 import { patientsRoutes } from './routes/patients';
 import { usersRoutes } from './routes/users';
 
@@ -40,6 +43,8 @@ export interface AppDependencies {
   clinic: ClinicService;
   patients: PatientsService;
   imports: ImportsService;
+  practitioners: PractitionersService;
+  schedules: SchedulesService;
   webOrigin: string;
   secureCookies: boolean;
   rateLimits?: RateLimits;
@@ -83,6 +88,7 @@ export async function buildApp(deps: AppDependencies): Promise<FastifyInstance> 
   clinicRoutes(app, { clinic: deps.clinic });
   patientsRoutes(app, { patients: deps.patients });
   importsRoutes(app, { imports: deps.imports });
+  schedulingRoutes(app, { practitioners: deps.practitioners, schedules: deps.schedules });
 
   return app;
 }

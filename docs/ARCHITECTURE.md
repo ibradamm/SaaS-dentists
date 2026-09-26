@@ -2,7 +2,7 @@
 
 > Statut : **en vigueur depuis le 2026-09-26** (recentrage du périmètre, ADR 0004).
 > - L'architecture v1, qui incluait WhatsApp, l'agent IA et Google Calendar, est archivée dans `docs/future/`.
-> - Phases réalisées : 0 (analyse), 1 (fondations), 2 (authentification, rôles, utilisateurs), 3 (patients et import, en attente de validation).
+> - Phases réalisées : 0 (analyse), 1 (fondations), 2 (authentification, rôles, utilisateurs), 3 (patients et import), 4 (cabinet et disponibilités, en attente de validation).
 > - Décisions détaillées : `docs/adr/`. Rapports de phase : `docs/phases/`.
 
 ---
@@ -86,10 +86,10 @@ Règles :
 | Santé | `GET /health/live`, `GET /health/ready` | Fait |
 | Authentification | `POST /api/auth/login`, `/logout`, `/password`, `/mfa/setup`, `/mfa/activate`, `/mfa/verify` ; `GET /api/auth/me`, `/csrf` | Fait |
 | Utilisateurs | `GET/POST /api/users`, `PATCH /api/users/:id`, `POST /api/users/:id/reset-password`, `/reset-mfa` | Fait |
-| Cabinet | `GET/PATCH /api/clinic` | Fait (minimal) ; complété en Phase 4 |
+| Cabinet | `GET/PATCH /api/clinic` (nom, fuseau, langue, coordonnées) | Fait |
 | Patients | `GET/POST /api/patients`, `GET/PATCH /api/patients/:id`, archivage, contacts, notes médicales, doublons | Fait |
 | Import | `GET/POST /api/imports`, lignes, rapport, validation, annulation, abandon | Fait |
-| Praticiens et disponibilités | praticiens, types de rendez-vous, horaires hebdomadaires, blocages | Phase 4 |
+| Praticiens et disponibilités | `GET/POST /api/practitioners`, `PATCH /:id`, archivage ; `GET/POST /api/appointment-types`, `PATCH /:id`, archivage ; `GET/PUT /api/practitioners/:id/schedules`, `DELETE …/schedules/:periodId` ; `GET/POST /api/availability-blocks`, `PUT/DELETE /:id` ; `GET /api/availability?from&to&practitionerId` | Fait (ADR 0006) |
 | Rendez-vous | `GET /api/appointments?from&to&practitionerId`, création, modification ou déplacement (version), annulation, statut | Phase 5 |
 | Finances | actes à encaisser, paiements, annulation de paiement, synthèses par période | Phase 7 |
 | Tableau de bord et statistiques | indicateurs du jour, séries temporelles | Phase 8 |
@@ -123,7 +123,7 @@ Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, 
 | Interface | React 19, Vite 8, react-router 8, TanStack Query 5, Tailwind 4 | Application de gestion sans besoin de rendu serveur |
 | Import de fichiers | papaparse (CSV), read-excel-file (xlsx), lecture dans le navigateur | ADR 0005 |
 | Agenda (Phase 5) | FullCalendar, paquets MIT uniquement ; alignement v6/v7 à trancher | Vues jour et semaine, glisser-déposer |
-| Dates et fuseaux (Phases 4-5) | Luxon | Fuseaux IANA, changements d'heure |
+| Dates et fuseaux | Luxon (serveur) ; `Intl` dans l'interface pour l'affichage dans le fuseau du cabinet | Fuseaux IANA, changements d'heure (ADR 0006) |
 | Graphiques (Phase 8) | Recharts | Intégration React |
 | Tests | Vitest, Testing Library, Playwright (E2E en Phase 10) | |
 | Qualité | ESLint (règles de frontières), Prettier, gitleaks, `pnpm audit` en CI | |
@@ -164,23 +164,23 @@ docs/            ARCHITECTURE.md, adr/, phases/, future/
 
 | Table | Rôle | État |
 |---|---|---|
-| `clinics` | Cabinet : nom, fuseau, langue, devise, pays, paramètres | Fait |
+| `clinics` | Cabinet : nom, fuseau, langue, devise, pays, coordonnées, paramètres | Fait |
 | `audit_logs` | Journal en ajout seul | Fait |
 | `users`, `clinic_memberships`, `sessions` | Comptes, rôle par cabinet, sessions | Fait |
 | `patients` | Identité, coordonnées administratives, note administrative, statut (actif ou archivé), source (saisie ou import), numéro de dossier d'origine, version | Fait |
 | `patient_contacts` | Téléphones au format E.164, lien (patient lui-même, responsable légal, autre), contact principal | Fait |
 | `patient_medical_notes` | Notes médicales chiffrées, en ajout seul, lecture tracée | Fait |
 | `import_batches`, `import_rows` | Lots d'import et lignes validées ; données effacées après validation ou abandon | Fait |
-| `practitioners` | Praticien réservable (lié ou non à un compte), couleur, actif | Phase 4 |
-| `appointment_types` | Type de rendez-vous : libellé, durée, couleur | Phase 4 |
-| `working_hours` | Horaires hebdomadaires par praticien, avec période de validité | Phase 4 |
-| `availability_blocks` | Absences, congés, créneaux bloqués | Phase 4 |
+| `practitioners` | Praticien réservable (lié ou non à un compte membre du cabinet), couleur, actif ou archivé, version | Fait |
+| `appointment_types` | Type de rendez-vous : nom (unique parmi les actifs), durée (5 à 480 min), couleur, version | Fait |
+| `working_schedules`, `working_intervals` | Périodes d'horaires datées par praticien, plages hebdomadaires en heure locale ; chevauchements refusés par contraintes d'exclusion | Fait |
+| `availability_blocks` | Absences et créneaux bloqués, d'un praticien ou de tout le cabinet, en instants UTC | Fait |
 | `appointments` | Rendez-vous : praticien, patient, type, début et fin, statut (prévu, honoré, absent, annulé), note administrative, version | Phase 5 |
 | `charges` | Montants dus (acte ou rendez-vous) | Phase 7 |
 | `payments` | Paiements non modifiables : une erreur s'annule et se ressaisit | Phase 7 |
 | `expenses` | Dépenses (option désactivée par défaut) | Phase 7 |
 
-**Contrainte anti double réservation (Phase 5)** : `EXCLUDE USING gist (practitioner_id WITH =, tstzrange(start_at, end_at, '[)') WITH &&) WHERE (status <> 'CANCELLED')`. Elle a été vérifiée sur PostgreSQL 16 en Phase 0 et fera l'objet d'un test de concurrence.
+**Contrainte anti double réservation (Phase 5)** : `EXCLUDE USING gist (practitioner_id WITH =, tstzrange(start_at, end_at, '[)') WITH &&) WHERE (status <> 'CANCELLED')`. Elle a été vérifiée sur PostgreSQL 16 en Phase 0 ; l'extension `btree_gist` est installée depuis la Phase 4 (migration 0010). Elle fera l'objet d'un test de concurrence. Règles préparées pour les rendez-vous : ADR 0006, section 7.
 
 ---
 
@@ -255,7 +255,7 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | 1 | Fondations : monorepo, PostgreSQL, migrations, isolation, file de tâches, CI | 1, 2 | Fait |
 | 2 | Authentification, rôles, permissions, utilisateurs, paramètres minimaux du cabinet | 3, 4, 6 | Fait |
 | 3 | Patients : dossier administratif, contacts, notes médicales restreintes, recherche, doublons, **import CSV / Excel** | 7 | Fait (en attente de validation) |
-| 4 | Cabinet et disponibilités : profil du cabinet, horaires d'ouverture, praticiens, types de rendez-vous, horaires hebdomadaires, absences et blocages | 5, 10, 11 | À faire |
+| 4 | Cabinet et disponibilités : profil du cabinet, praticiens (un ou plusieurs), types de rendez-vous, horaires hebdomadaires datés, absences et blocages, calcul des disponibilités (pas de table d'horaires d'ouverture, ADR 0006) | 5, 10, 11 | Fait (en attente de validation) |
 | 5 | Rendez-vous et agenda : création, déplacement, annulation, statuts, anti double réservation, vues jour et semaine, historique patient | 8, 9 | À faire |
 | 6 | Applications web dentiste et secrétaire : parcours quotidiens par rôle, ergonomie, accessibilité, téléphone et tablette | 12, 13 | À faire |
 | 7 | Paiements et revenus encaissés : actes à encaisser, paiements, annulations, impayés, périodes | 14 | À faire |
@@ -300,9 +300,10 @@ Seul l'hébergement est à prévoir, pour environ 30 à 150 € par mois selon l
 | # | Question | Bloque | Réponse par défaut |
 |---|---|---|---|
 | 1 | Pays des premiers cabinets clients ? | Phase 11 (production) | Aucune : hébergement, conservation et obligations en dépendent |
-| 2 | Plusieurs praticiens par cabinet ? Faut-il gérer les fauteuils ou salles ? | Phase 4 | Plusieurs praticiens ; pas de gestion des fauteuils |
 | 3 | Chiffre d'affaires = sommes encaissées ou montants facturés ? | Phase 7 | Encaissements, libellés « revenus encaissés » |
 | 4 | Suivre les dépenses ? | Phase 7 | Non (option désactivée) |
+
+Question 2 (praticiens, fauteuils), réponse du 2026-09-26 : un ou plusieurs praticiens par cabinet ; pas de fauteuils ni de salles au MVP, modèle extensible (ADR 0006, section 8).
 
 Question O3 (logiciel métier existant), réponse du 2026-09-26 : inconnue, car le produit est un SaaS généraliste. D'où l'import de fichiers en Phase 3 et l'absence de dossier clinique complet.
 

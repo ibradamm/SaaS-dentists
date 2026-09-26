@@ -59,6 +59,9 @@ importers:
       libphonenumber-js:
         specifier: 1.13.14
         version: 1.13.14
+      luxon:
+        specifier: 3.7.2
+        version: 3.7.2
       otplib:
         specifier: 13.5.0
         version: 13.5.0
@@ -78,6 +81,9 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
+      '@types/luxon':
+        specifier: 3.7.1
+        version: 3.7.1
       '@types/node':
         specifier: 22.20.4
         version: 22.20.4
@@ -1256,6 +1262,9 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
+
+  '@types/luxon@3.7.1':
+    resolution: {integrity: sha512-H3iskjFIAn5SlJU7OuxUmTEpebK6TKB8rxZShDslBMZJ5u9S//KM1sbdAisiSrqwLQncVjnpi2OK2J51h+4lsg==}
 
   '@types/node@22.20.4':
     resolution: {integrity: sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA==}
@@ -3529,6 +3538,8 @@ snapshots:
   '@types/estree@1.0.9': {}
 
   '@types/json-schema@7.0.15': {}
+
+  '@types/luxon@3.7.1': {}
 
   '@types/node@22.20.4':
     dependencies:

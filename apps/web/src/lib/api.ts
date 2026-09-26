@@ -1,4 +1,20 @@
 import {
+  appointmentTypeSchema,
+  availabilityBlockSchema,
+  availabilityResponseSchema,
+  listAppointmentTypesResponseSchema,
+  listBlocksResponseSchema,
+  listPractitionersResponseSchema,
+  listSchedulesResponseSchema,
+  practitionerSchema,
+  type CreateAppointmentTypeRequest,
+  type CreateBlockRequest,
+  type CreatePractitionerRequest,
+  type ReplaceBlockRequest,
+  type SetScheduleRequest,
+  type UpdateAppointmentTypeRequest,
+  type UpdateClinicRequest,
+  type UpdatePractitionerRequest,
   duplicateCandidatesResponseSchema,
   importRowsReportResponseSchema,
   importSummarySchema,
@@ -137,6 +153,71 @@ export const api = {
     request('POST', `/api/users/${id}/reset-password`, temporaryPasswordResponseSchema, {}),
   resetMfa: (id: string) => request('POST', `/api/users/${id}/reset-mfa`, clinicUserSchema, {}),
   clinic: () => request('GET', '/api/clinic', clinicResponseSchema),
+  updateClinic: (body: UpdateClinicRequest) =>
+    request('PATCH', '/api/clinic', clinicResponseSchema, body),
+
+  listPractitioners: (includeArchived = false) =>
+    request(
+      'GET',
+      `/api/practitioners?includeArchived=${includeArchived}`,
+      listPractitionersResponseSchema,
+    ).then((r) => r.practitioners),
+  createPractitioner: (body: CreatePractitionerRequest) =>
+    request('POST', '/api/practitioners', practitionerSchema, body),
+  updatePractitioner: (id: string, body: UpdatePractitionerRequest) =>
+    request('PATCH', `/api/practitioners/${id}`, practitionerSchema, body),
+  archivePractitioner: (id: string, version: number) =>
+    request('POST', `/api/practitioners/${id}/archive`, practitionerSchema, { version }),
+  restorePractitioner: (id: string, version: number) =>
+    request('POST', `/api/practitioners/${id}/restore`, practitionerSchema, { version }),
+
+  listAppointmentTypes: (includeArchived = false) =>
+    request(
+      'GET',
+      `/api/appointment-types?includeArchived=${includeArchived}`,
+      listAppointmentTypesResponseSchema,
+    ).then((r) => r.appointmentTypes),
+  createAppointmentType: (body: CreateAppointmentTypeRequest) =>
+    request('POST', '/api/appointment-types', appointmentTypeSchema, body),
+  updateAppointmentType: (id: string, body: UpdateAppointmentTypeRequest) =>
+    request('PATCH', `/api/appointment-types/${id}`, appointmentTypeSchema, body),
+  archiveAppointmentType: (id: string, version: number) =>
+    request('POST', `/api/appointment-types/${id}/archive`, appointmentTypeSchema, { version }),
+  restoreAppointmentType: (id: string, version: number) =>
+    request('POST', `/api/appointment-types/${id}/restore`, appointmentTypeSchema, { version }),
+
+  listSchedules: (practitionerId: string) =>
+    request(
+      'GET',
+      `/api/practitioners/${practitionerId}/schedules`,
+      listSchedulesResponseSchema,
+    ).then((r) => r.periods),
+  setSchedule: (practitionerId: string, body: SetScheduleRequest) =>
+    request(
+      'PUT',
+      `/api/practitioners/${practitionerId}/schedules`,
+      listSchedulesResponseSchema,
+      body,
+    ).then((r) => r.periods),
+  deleteSchedulePeriod: (practitionerId: string, periodId: string, version: number) =>
+    request(
+      'DELETE',
+      `/api/practitioners/${practitionerId}/schedules/${periodId}?version=${version}`,
+      listSchedulesResponseSchema,
+    ).then((r) => r.periods),
+
+  listBlocks: (query: { from: string; to: string; practitionerId?: string | undefined }) =>
+    request('GET', `/api/availability-blocks?${toQuery(query)}`, listBlocksResponseSchema).then(
+      (r) => r.blocks,
+    ),
+  createBlock: (body: CreateBlockRequest) =>
+    request('POST', '/api/availability-blocks', availabilityBlockSchema, body),
+  replaceBlock: (id: string, body: ReplaceBlockRequest) =>
+    request('PUT', `/api/availability-blocks/${id}`, availabilityBlockSchema, body),
+  deleteBlock: (id: string, version: number) =>
+    request('DELETE', `/api/availability-blocks/${id}?version=${version}`, noContent),
+  availability: (query: { from: string; to: string; practitionerId?: string | undefined }) =>
+    request('GET', `/api/availability?${toQuery(query)}`, availabilityResponseSchema),
 
   listPatients: (query: {
     q?: string;

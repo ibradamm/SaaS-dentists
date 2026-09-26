@@ -4,7 +4,7 @@ import { AppError } from '../lib/errors';
 import { normalizeIp, truncateUserAgent } from '../lib/request-meta';
 import type { AuthService } from '../modules/auth/auth.service';
 import type { AuthenticatedSession, RequestMeta, UserActor } from '../modules/auth/auth.types';
-import { authorize } from '../modules/auth/authorize';
+import { authorize, authorizeAny } from '../modules/auth/authorize';
 import { safeEqual } from '../modules/auth/tokens';
 import { readSessionCookie, type CookiePolicy } from './session-cookie';
 
@@ -13,11 +13,14 @@ import { readSessionCookie, type CookiePolicy } from './session-cookie';
  * - public : aucune session requise (connexion, santé) ;
  * - allow : étapes d'authentification tolérées (par défaut aucune : accès complet requis) ;
  * - permission : permission exigée (vérifiée aussi par le service appelé).
+ * - anyPermission : au moins une des permissions (portée exacte vérifiée par le service).
  */
 export interface RouteAccess {
   public?: boolean;
   allow?: readonly SessionRestriction[];
   permission?: Permission;
+  /** Au moins une de ces permissions ; le service vérifie ensuite la portée exacte. */
+  anyPermission?: readonly Permission[];
 }
 
 declare module 'fastify' {
@@ -86,5 +89,6 @@ export function registerAuth(
       }
     }
     if (access.permission) authorize(session.actor, access.permission);
+    if (access.anyPermission) authorizeAny(session.actor, access.anyPermission);
   });
 }

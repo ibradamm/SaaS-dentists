@@ -24,7 +24,19 @@ describe('catalogue du schéma', () => {
       WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
       ORDER BY c.relname`);
     expect(rows.map((r) => r.table)).toEqual(
-      expect.arrayContaining(['audit_logs', 'clinic_memberships', 'clinics', 'sessions', 'users']),
+      expect.arrayContaining([
+        'audit_logs',
+        'clinic_memberships',
+        'clinics',
+        'sessions',
+        'users',
+        'patients',
+        'practitioners',
+        'appointment_types',
+        'working_schedules',
+        'working_intervals',
+        'availability_blocks',
+      ]),
     );
     const unprotected = rows
       .filter((r) => !r.rls || !r.forced || r.policies === 0)
@@ -74,6 +86,14 @@ describe('catalogue du schéma', () => {
       { table: 'patient_contacts', on_delete: 'c' }, // suppression en cascade
       { table: 'patient_medical_notes', on_delete: 'r' }, // bloque : exclu de l'annulation
     ]);
+  });
+
+  it("les horaires sont protégés du chevauchement par des contraintes d'exclusion", async () => {
+    const { rows } = await t.ownerPool.query<{ name: string }>(`
+      SELECT conname AS name FROM pg_constraint WHERE contype = 'x' ORDER BY 1`);
+    expect(rows.map((r) => r.name)).toEqual(
+      expect.arrayContaining(['working_intervals_no_overlap', 'working_schedules_no_overlap']),
+    );
   });
 
   it('le rôle applicatif ne peut créer aucun objet dans le schéma public', async () => {

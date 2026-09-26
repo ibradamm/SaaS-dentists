@@ -24,16 +24,18 @@ describe('déploiement de la base', () => {
     expect(result.alreadyApplied).toBeGreaterThanOrEqual(3);
   });
 
-  it('deux déploiements simultanés sur une base vierge appliquent chaque migration une seule fois', async () => {
+  it('quatre déploiements simultanés sur une base vierge appliquent chaque migration une seule fois', async () => {
     const databaseName = `dental_test_${randomBytes(4).toString('hex')}`;
     extraDatabases.push(databaseName);
     await bootstrapDatabase({ adminUrl, databaseName, ownerPassword, appPassword });
     const url = roleUrl(adminUrl, DB_OWNER_ROLE, ownerPassword, databaseName);
 
-    const [first, second] = await Promise.all([deployDatabase(url), deployDatabase(url)]);
-    const appliedCounts = [first.applied.length, second.applied.length].sort();
-    expect(appliedCounts[0]).toBe(0);
-    expect(appliedCounts[1]).toBeGreaterThanOrEqual(3);
+    // Quatre instances qui démarrent ensemble : sans verrou de déploiement, les droits sur la
+    // file de tâches étaient accordés en parallèle et PostgreSQL refusait l'un des GRANT.
+    const results = await Promise.all([1, 2, 3, 4].map(() => deployDatabase(url)));
+    const appliedCounts = results.map((r) => r.applied.length).sort((a, b) => a - b);
+    expect(appliedCounts.slice(0, 3)).toEqual([0, 0, 0]);
+    expect(appliedCounts[3]).toBeGreaterThanOrEqual(3);
 
     const client = new pg.Client({ connectionString: url });
     await client.connect();
@@ -41,6 +43,6 @@ describe('déploiement de la base', () => {
       'SELECT count(*)::int AS n FROM migrations.applied',
     );
     await client.end();
-    expect(rows[0]?.n).toBe(appliedCounts[1]);
+    expect(rows[0]?.n).toBe(appliedCounts[3]);
   });
 });

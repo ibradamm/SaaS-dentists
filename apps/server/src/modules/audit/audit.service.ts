@@ -19,7 +19,7 @@ export const auditEntrySchema = z.object({
   // patients n'y figurent jamais (seul le nom du champ modifié est tracé).
   changes: z
     .record(
-      z.string().regex(/^[a-zA-Z_]+$/),
+      z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/),
       z.object({ from: auditValue.optional(), to: auditValue.optional() }),
     )
     .nullable()

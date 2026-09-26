@@ -5,3 +5,4 @@ export * from './clinic-memberships';
 export * from './sessions';
 export * from './imports';
 export * from './patients';
+export * from './scheduling';

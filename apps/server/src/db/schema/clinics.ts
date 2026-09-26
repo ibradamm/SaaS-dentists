@@ -17,6 +17,13 @@ export const clinics = pgTable(
     status: text('status', { enum: CLINIC_STATUSES }).notNull().default('ACTIVE'),
     // Paramètres du cabinet, validés par un schéma Zod à la lecture et à l'écriture.
     settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    // Coordonnées (facultatives) ; téléphone au format E.164.
+    addressLine1: text('address_line1'),
+    addressLine2: text('address_line2'),
+    postalCode: text('postal_code'),
+    city: text('city'),
+    phone: text('phone'),
+    email: text('email'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -25,6 +32,12 @@ export const clinics = pgTable(
     check('clinics_currency_format', sql`${t.currency} ~ '^[A-Z]{3}$'`),
     check('clinics_country_format', sql`${t.countryCode} ~ '^[A-Z]{2}$'`),
     check('clinics_status_values', sql`${t.status} in ('ACTIVE', 'SUSPENDED')`),
+    check(
+      'clinics_address_lengths',
+      sql`coalesce(char_length(${t.addressLine1}), 0) <= 200 and coalesce(char_length(${t.addressLine2}), 0) <= 200 and coalesce(char_length(${t.postalCode}), 0) <= 20 and coalesce(char_length(${t.city}), 0) <= 100`,
+    ),
+    check('clinics_phone_format', sql`${t.phone} is null or ${t.phone} ~ '^\\+[1-9][0-9]{6,14}$'`),
+    check('clinics_email_format', sql`${t.email} is null or ${t.email} ~ '^[^@\\s]+@[^@\\s]+$'`),
   ],
 );
 

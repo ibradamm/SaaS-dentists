@@ -11,6 +11,8 @@ import { createAuthService } from '../src/modules/auth/auth.service';
 import { createClinicService } from '../src/modules/clinic/clinic.service';
 import { createImportsService } from '../src/modules/imports/imports.service';
 import { createPatientsService } from '../src/modules/patients/patients.service';
+import { createPractitionersService } from '../src/modules/scheduling/practitioners.service';
+import { createSchedulesService } from '../src/modules/scheduling/schedules.service';
 import { createUsersService } from '../src/modules/users/users.service';
 
 export const TEST_WEB_ORIGIN = 'http://127.0.0.1:5173';
@@ -44,6 +46,8 @@ export async function buildTestApp(
     clinic: createClinicService({ db }),
     patients: createPatientsService({ db, secretBox, ...now }),
     imports: createImportsService({ db, ...now }),
+    practitioners: createPractitionersService({ db, ...now }),
+    schedules: createSchedulesService({ db, ...now }),
     webOrigin: TEST_WEB_ORIGIN,
     secureCookies: false,
     rateLimits: options.rateLimits ?? RELAXED,
@@ -69,7 +73,7 @@ export function browser(app: FastifyInstance) {
   }
 
   async function call(
-    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
     url: string,
     payload?: unknown,
     headers: Record<string, string> = {},
@@ -94,6 +98,8 @@ export function browser(app: FastifyInstance) {
       call('POST', url, payload ?? {}, headers),
     patch: (url: string, payload: unknown, headers?: Record<string, string>) =>
       call('PATCH', url, payload, headers),
+    put: (url: string, payload: unknown, headers?: Record<string, string>) =>
+      call('PUT', url, payload, headers),
     delete: (url: string, headers?: Record<string, string>) =>
       call('DELETE', url, undefined, headers),
     login: (email: string, password: string) =>

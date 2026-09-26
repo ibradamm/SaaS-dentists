@@ -64,6 +64,20 @@
       "when": 1790451603998,
       "tag": "0008_patients_security",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790455010842,
+      "tag": "0009_scheduling_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790455016942,
+      "tag": "0010_scheduling_security",
+      "breakpoints": true
     }
   ]
 }
