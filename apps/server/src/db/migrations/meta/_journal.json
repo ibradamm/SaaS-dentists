@@ -22,6 +22,27 @@
       "when": 1790438836180,
       "tag": "0002_tenant_security",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790440806616,
+      "tag": "0003_auth_context_functions",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790440807593,
+      "tag": "0004_auth_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790440844721,
+      "tag": "0005_auth_security",
+      "breakpoints": true
     }
   ]
 }

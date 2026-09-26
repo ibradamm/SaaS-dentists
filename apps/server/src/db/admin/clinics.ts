@@ -1,17 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import { z } from 'zod';
+import { isValidTimeZone } from '../../lib/time';
 import type { Database } from '../client';
 import { clinics, type Clinic } from '../schema';
-
-function isValidTimeZone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: value });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export const provisionClinicInput = z.object({
   name: z.string().trim().min(1).max(200),

@@ -1,6 +1,6 @@
 # Plateforme de gestion de cabinet dentaire — Phase 0 : analyse et architecture
 
-> Statut : **validé le 2026-09-26**. Phase 1 réalisée : voir `docs/phases/phase-1.md`. Les écarts ultérieurs au plan sont tracés dans `docs/adr/`.
+> Statut : **validé le 2026-09-26**. Phases 1 et 2 réalisées : voir `docs/phases/`. Les écarts ultérieurs au plan sont tracés dans `docs/adr/`.
 > Date : 2026-09-26. Toute information marquée **[À VÉRIFIER]** n'a pas pu être confirmée
 > sur la documentation officielle depuis l'environnement de développement (accès réseau restreint).
 
@@ -251,9 +251,8 @@ Correspondance avec la structure conceptuelle demandée : `backend/` → `apps/s
 | `clinics` | id, name, timezone, locale, currency, country_code, settings (jsonb validé par Zod) | Paramètres : délai minimal d'annulation, horizon de réservation, durée de hold, texte d'urgence, etc. |
 | `users` | id, email (unique global), password_hash (Argon2id), full_name, status, mfa_secret_enc, last_login_at | Utilisateur global : un même compte pourra appartenir à plusieurs cabinets |
 | `clinic_memberships` | id, clinic_id, user_id, role_id, status | unique(clinic_id, user_id) |
-| `permissions` | key (PK), description | Alimentée depuis le catalogue défini dans le code ; aucune permission hors catalogue possible |
-| `roles` | id, clinic_id (NULL = rôle système), key, name | ADMIN, DENTIST, SECRETARY semés par migration |
-| `role_permissions` | role_id, permission_key | |
+| `permissions` | key (PK), description | **Remplacée en Phase 2** par le catalogue du code (`packages/shared/src/permissions.ts`), voir ADR 0003 |
+| `roles`, `role_permissions` | — | **Non créées en Phase 2** : rôle porté par `clinic_memberships.role`, matrice dans le code (ADR 0003). Tables à ajouter si des rôles personnalisés par cabinet sont demandés |
 | `sessions` | id (= SHA-256 du jeton), user_id, clinic_id, expires_at, last_seen_at, ip, user_agent | Le jeton brut n'est jamais stocké |
 | `practitioners` | id, clinic_id, user_id (nullable), display_name, color, active | Ressource réservable, distincte du compte utilisateur |
 
@@ -524,14 +523,14 @@ Blocage d'un créneau déjà occupé : l'interface liste les rendez-vous en conf
 |---|:-:|:-:|:-:|:-:|
 | `appointment.read` | ✓ | ✓ | ✓ | propres patients |
 | `appointment.write` (créer, déplacer, annuler) | ✓ | ✓ | ✓ | propres patients, selon règles |
-| `schedule.manage` (horaires, blocages) | ✓ | ✓ (les siens) | ✓ (pour le compte d'un praticien) ⚠︎ à confirmer | — |
+| `schedule.manage` (horaires, blocages) | ✓ | ✓ (les siens) | ✓ (pour le compte d'un praticien) — validé | — |
 | `patient.read` (administratif) | ✓ | ✓ | ✓ | propres profils, minimal |
 | `patient.write` | ✓ | ✓ | ✓ | création uniquement |
 | `patient.medical.read` / `.write` | ✓ | ✓ | — | — |
 | `payment.read` | ✓ | ✓ | ✓ | — |
 | `payment.write` (enregistrer) | ✓ | ✓ | ✓ | — |
-| `payment.void` | ✓ | ✓ | — ⚠︎ à confirmer | — |
-| `finance.reports.read` (CA, statistiques) | ✓ | ✓ | — ⚠︎ à confirmer | — |
+| `payment.void` | ✓ | ✓ | — (validé) | — |
+| `finance.reports.read` (CA, statistiques) | ✓ | ✓ | — (validé) | — |
 | `conversation.read` / `.reply` | ✓ | ✓ | ✓ | — |
 | `clinic.settings.manage` | ✓ | — | — | — |
 | `user.manage` (comptes, rôles) | ✓ | — | — | — |
@@ -720,7 +719,7 @@ Classées selon la phase qu'elles bloquent. **Seule la question 0 bloque la Phas
 | 6 | Niveau de détail acceptable dans les événements Google (nom complet, prénom + initiale, référence seule) ? | Phase 5 | Minimisation des données de santé chez un tiers | Prénom + initiale + type de soin |
 | 7 | Disposez-vous d'un **numéro dédié** non utilisé sur l'application WhatsApp, et pouvez-vous faire vérifier l'entreprise par Meta ? | Phase 6 | Délai d'onboarding Meta indépendant du code | À démarrer maintenant |
 | 8 | Règles du cabinet : délai minimal d'annulation/déplacement par WhatsApp, horizon de réservation, types de soins réservables par l'agent (1re consultation ? urgence ?), texte et numéro d'urgence | Phases 4 et 7 | Paramètres métier des outils de l'agent | Annulation ≥ 24 h, horizon 60 jours, seuls contrôle et détartrage réservables, urgences → humain |
-| 9 | Matrice de permissions (I.2) : la secrétaire voit-elle le CA ? peut-elle annuler un paiement ? bloquer l'agenda du dentiste ? | Phases 2 et 10 | Permissions par défaut | Celles marquées ⚠︎ ci-dessus : non / non / oui |
+| 9 | Matrice de permissions (I.2) : la secrétaire voit-elle le CA ? peut-elle annuler un paiement ? bloquer l'agenda du dentiste ? | Phases 2 et 10 | Permissions par défaut | **Répondu le 2026-09-26 : non / non / oui** |
 | 10 | Définition du **chiffre d'affaires** : encaissements (paiements reçus sur la période) ou montants facturés ? | Phase 10 | Formule de calcul | Encaissements, libellé « revenus encaissés » |
 
 ---

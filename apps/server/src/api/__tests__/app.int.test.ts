@@ -1,23 +1,16 @@
 import { apiErrorSchema, livenessResponseSchema, readinessResponseSchema } from '@dental/shared';
 import type { FastifyInstance } from 'fastify';
-import { pino } from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openTestDatabase } from '../../../test/db';
-import { createPool } from '../../db/client';
-import { buildApp } from '../app';
-
-const logger = pino({ level: 'silent' });
+import { createDb, createPool } from '../../db/client';
+import { buildTestApp } from '../../../test/app';
 
 describe('API : santé, erreurs et en-têtes', () => {
   const t = openTestDatabase();
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    app = await buildApp({ logger, pool: t.appPool, trustProxyHops: 0 });
-    app.get('/test/boom', () => {
-      throw new Error('détail interne : mot de passe=abc');
-    });
-    await app.ready();
+    app = await buildTestApp(t.appPool);
   });
   afterAll(async () => {
     await app.close();
@@ -72,7 +65,21 @@ describe('API : santé, erreurs et en-têtes', () => {
   });
 
   it('une erreur inattendue renvoie 500 générique, sans message ni trace internes', async () => {
-    const res = await app.inject({ method: 'GET', url: '/test/boom' });
+    const failing = createDb(t.appPool);
+    const broken = await buildTestApp(t.appPool, {
+      db: new Proxy(failing, {
+        get: (target, prop) =>
+          prop === 'transaction'
+            ? () => Promise.reject(new Error('détail interne : mot de passe=abc'))
+            : (Reflect.get(target, prop) as unknown),
+      }),
+    });
+    const res = await broken.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: 'x@cabinet.test', password: 'y' },
+    });
+    await broken.close();
     expect(res.statusCode).toBe(500);
     const body = apiErrorSchema.parse(res.json());
     expect(body.error).toMatchObject({ code: 'INTERNAL_ERROR', message: 'Erreur interne' });
@@ -98,7 +105,7 @@ describe('API : base de données indisponible', () => {
       max: 1,
       applicationName: 'test-dead',
     });
-    const app = await buildApp({ logger, pool: deadPool, trustProxyHops: 0 });
+    const app = await buildTestApp(deadPool);
     try {
       const res = await app.inject({ method: 'GET', url: '/health/ready' });
       expect(res.statusCode).toBe(503);

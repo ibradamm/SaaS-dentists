@@ -16,6 +16,18 @@ L'isolation repose sur quatre mécanismes indépendants. Chacun suffit à bloque
 
 `clinic_id` a pour valeur par défaut `app.current_clinic_id()` : une insertion dans le contexte d'un cabinet est rattachée à ce cabinet sans que le code ait à le répéter. Une valeur explicite différente est refusée par la politique RLS.
 
+## Modèle de menace (précision, Phase 2)
+
+Le contexte (`app.clinic_id`, etc.) est positionné par l'application, et tout rôle PostgreSQL peut appeler `set_config`. La RLS protège donc contre les **oublis** : une requête sans filtre, un contexte absent, une connexion réutilisée. Elle ne protège pas contre un processus applicatif compromis, qui pourrait choisir un autre cabinet.
+
+Contre ce second risque, les défenses sont ailleurs :
+- sessions liées à un cabinet et vérifiées côté serveur ;
+- aucun identifiant de cabinet accepté depuis le client ;
+- moindre privilège du rôle `dental_app` (ni DDL, ni `BYPASSRLS`, droits par colonne) ;
+- journal d'audit.
+
+Par ailleurs, les services filtrent aussi explicitement par `clinic_id` dans leurs requêtes. Ce filtre et la RLS forment deux couches indépendantes.
+
 ## Alternatives écartées
 
 | Option | Raison du rejet |

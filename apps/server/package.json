@@ -12,13 +12,20 @@
     "db:bootstrap": "tsx --env-file-if-exists=../../.env src/db/cli/bootstrap.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=../../.env src/db/cli/migrate.ts",
-    "db:seed": "tsx --env-file-if-exists=../../.env src/db/cli/seed.ts"
+    "db:seed": "tsx --env-file-if-exists=../../.env src/db/cli/seed.ts",
+    "admin:create-clinic": "tsx --env-file-if-exists=../../.env src/db/cli/create-clinic.ts",
+    "admin:create-admin": "tsx --env-file-if-exists=../../.env src/db/cli/create-admin.ts",
+    "admin:reset-mfa": "tsx --env-file-if-exists=../../.env src/db/cli/reset-mfa.ts"
   },
   "dependencies": {
     "@dental/shared": "workspace:*",
+    "@fastify/cookie": "11.1.2",
     "@fastify/helmet": "13.1.1",
+    "@fastify/rate-limit": "11.2.0",
+    "@node-rs/argon2": "2.2.1",
     "drizzle-orm": "0.45.3",
     "fastify": "5.12.5",
+    "otplib": "13.5.0",
     "pg": "8.23.0",
     "pg-boss": "12.35.0",
     "pino": "10.3.1",

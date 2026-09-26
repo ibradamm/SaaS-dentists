@@ -3,14 +3,14 @@ import { openTestDatabase } from '../../../test/db';
 import { DB_APP_ROLE } from '../roles';
 
 /**
- * Garde-fou structurel : toute nouvelle table métier doit être isolée par cabinet. Ce test
- * échoue si une migration ajoute une table avec clinic_id sans RLS activée et forcée.
+ * Garde-fou structurel : toute table du schéma public doit être protégée par RLS. Ce test
+ * échoue si une migration ajoute une table sans RLS activée et forcée.
  */
 describe('catalogue du schéma', () => {
   const t = openTestDatabase();
   afterAll(() => t.close());
 
-  it('toute table portant clinic_id (et clinics) a la RLS activée, forcée et une politique', async () => {
+  it('toute table du schéma public a la RLS activée, forcée et au moins une politique', async () => {
     const { rows } = await t.ownerPool.query<{
       table: string;
       rls: boolean;
@@ -22,10 +22,10 @@ describe('catalogue du schéma', () => {
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
-        AND (c.relname = 'clinics' OR EXISTS (
-          SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'clinic_id' AND NOT a.attisdropped))
       ORDER BY c.relname`);
-    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows.map((r) => r.table)).toEqual(
+      expect.arrayContaining(['audit_logs', 'clinic_memberships', 'clinics', 'sessions', 'users']),
+    );
     const unprotected = rows
       .filter((r) => !r.rls || !r.forced || r.policies === 0)
       .map((r) => r.table);

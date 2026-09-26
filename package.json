@@ -19,7 +19,11 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "setup:env": "node scripts/init-env.mjs",
+    "admin:create-clinic": "pnpm --filter @dental/server admin:create-clinic",
+    "admin:create-admin": "pnpm --filter @dental/server admin:create-admin",
+    "admin:reset-mfa": "pnpm --filter @dental/server admin:reset-mfa"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

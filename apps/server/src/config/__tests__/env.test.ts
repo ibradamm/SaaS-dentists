@@ -4,6 +4,7 @@ import { ConfigError, loadApiConfig, loadBootstrapConfig } from '../env';
 const validApiEnv = {
   APP_ENV: 'development',
   DATABASE_URL: 'postgres://dental_app:secret-value@127.0.0.1:5432/dental',
+  DATA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 };
 
 describe('configuration', () => {
@@ -29,6 +30,32 @@ describe('configuration', () => {
       expect(error).toBeInstanceOf(ConfigError);
       expect((error as Error).message).not.toContain('TOPSECRET');
     }
+  });
+
+  it("dérive l'origine web et les cookies sécurisés de l'environnement", () => {
+    expect(loadApiConfig(validApiEnv)).toMatchObject({
+      WEB_ORIGIN: 'http://127.0.0.1:5173',
+      SECURE_COOKIES: false,
+    });
+    const prod = loadApiConfig({
+      ...validApiEnv,
+      APP_ENV: 'production',
+      WEB_ORIGIN: 'https://app.cabinet.fr/',
+    });
+    expect(prod).toMatchObject({ WEB_ORIGIN: 'https://app.cabinet.fr', SECURE_COOKIES: true });
+  });
+
+  it('exige une origine web HTTPS en production', () => {
+    expect(() => loadApiConfig({ ...validApiEnv, APP_ENV: 'production' })).toThrow(/WEB_ORIGIN/);
+    expect(() =>
+      loadApiConfig({ ...validApiEnv, APP_ENV: 'production', WEB_ORIGIN: 'http://app.cabinet.fr' }),
+    ).toThrow(/HTTPS/);
+  });
+
+  it('refuse une clé de chiffrement de mauvaise taille', () => {
+    expect(() => loadApiConfig({ ...validApiEnv, DATA_ENCRYPTION_KEY: 'Y291cnRl' })).toThrow(
+      /DATA_ENCRYPTION_KEY/,
+    );
   });
 
   it('refuse un environnement inconnu', () => {

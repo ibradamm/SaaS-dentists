@@ -24,14 +24,49 @@ const databaseShape = {
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
 };
 
-const apiSchema = z.object({
-  ...baseShape,
-  ...databaseShape,
-  API_HOST: z.string().min(1).default('127.0.0.1'),
-  API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  // Nombre de proxys de confiance devant l'API (Caddy en production = 1). 0 = aucun.
-  API_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
-});
+const encryptionKey = z
+  .string()
+  .refine((v) => Buffer.from(v, 'base64').length === 32, 'clé base64 de 32 octets attendue');
+
+const DEV_WEB_ORIGIN = 'http://127.0.0.1:5173';
+
+const apiSchema = z
+  .object({
+    ...baseShape,
+    ...databaseShape,
+    API_HOST: z.string().min(1).default('127.0.0.1'),
+    API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+    // Nombre de proxys de confiance devant l'API (Caddy en production = 1). 0 = aucun.
+    API_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+    // Origine de l'interface web : seule origine acceptée pour les requêtes modifiantes.
+    WEB_ORIGIN: z.url().optional(),
+    // Clé de chiffrement des champs sensibles (secrets TOTP). Générer :
+    // node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+    DATA_ENCRYPTION_KEY: encryptionKey,
+  })
+  .superRefine((config, ctx) => {
+    const deployed = config.APP_ENV === 'production' || config.APP_ENV === 'staging';
+    if (deployed && !config.WEB_ORIGIN) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['WEB_ORIGIN'],
+        message: 'obligatoire en staging et production',
+      });
+    }
+    if (deployed && config.WEB_ORIGIN && !config.WEB_ORIGIN.startsWith('https://')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['WEB_ORIGIN'],
+        message: 'HTTPS obligatoire en staging et production',
+      });
+    }
+  })
+  .transform((config) => ({
+    ...config,
+    WEB_ORIGIN: new URL(config.WEB_ORIGIN ?? DEV_WEB_ORIGIN).origin,
+    // Cookies « Secure » dès qu'on n'est plus en local.
+    SECURE_COOKIES: config.APP_ENV === 'production' || config.APP_ENV === 'staging',
+  }));
 
 const workerSchema = z.object({ ...baseShape, ...databaseShape });
 

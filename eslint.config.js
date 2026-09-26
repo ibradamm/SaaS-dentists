@@ -20,7 +20,7 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.js', 'apps/server/scripts/*.mjs'],
+          allowDefaultProject: ['eslint.config.js', 'apps/server/scripts/*.mjs', 'scripts/*.mjs'],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -97,7 +97,7 @@ export default tseslint.config(
   },
   {
     // Les CLI d'exploitation écrivent sur la sortie standard.
-    files: ['apps/server/src/db/cli/**', 'apps/server/scripts/**'],
+    files: ['apps/server/src/db/cli/**', 'apps/server/scripts/**', 'scripts/**'],
     rules: { 'no-console': 'off' },
   },
   prettier,

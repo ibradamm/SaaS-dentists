@@ -18,14 +18,27 @@ Architecture et décisions : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`d
 
 ```bash
 pnpm install
-cp .env.example .env      # valeurs de développement local uniquement
+pnpm setup:env            # crée .env (valeurs locales + clé de chiffrement générée)
 pnpm db:bootstrap         # rôles dental_owner / dental_app et base (une fois)
 pnpm db:migrate           # migrations + schéma de la file de tâches
-pnpm db:seed              # cabinet de démonstration (development uniquement)
+pnpm db:seed              # cabinet de démonstration + 3 comptes (mots de passe temporaires affichés)
 
 pnpm dev:api              # http://127.0.0.1:3000/health/ready
 pnpm dev:worker
 pnpm dev:web              # http://127.0.0.1:5173
+```
+
+Première connexion d'un compte :
+1. mot de passe temporaire ;
+2. choix d'un mot de passe personnel ;
+3. pour les administrateurs et les dentistes, mise en place de la double authentification (application TOTP).
+
+## Administration (tous environnements, rôle propriétaire)
+
+```bash
+pnpm admin:create-clinic --name "Cabinet X" --timezone Europe/Paris --locale fr-FR --currency EUR --country FR
+pnpm admin:create-admin --clinic <id> --email admin@cabinet.fr --name "Nom Prénom"
+pnpm admin:reset-mfa --email admin@cabinet.fr   # perte du téléphone du seul administrateur
 ```
 
 ## Vérifications (identiques à la CI)
@@ -52,6 +65,7 @@ docs/           architecture, décisions (ADR), rapports de phase
 ## Règles
 
 - Jamais de secret dans le dépôt : `.env` est ignoré par Git et gitleaks tourne en CI.
-- Toute requête métier passe par `withTenant` (`apps/server/src/db/tenant.ts`).
-- Toute nouvelle table portant `clinic_id` reçoit RLS, `FORCE` et une politique ; le test `schema-catalog` l'impose.
+- Toute requête métier passe par `withTenant` (`apps/server/src/db/tenant.ts`) et filtre aussi explicitement par `clinic_id`.
+- Toute action protégée appelle `authorize()` dans son service ; la route déclare aussi la permission (`config.access`).
+- Toute table du schéma public reçoit RLS, `FORCE` et une politique ; le test `schema-catalog` l'impose.
 - Une migration appliquée n'est jamais modifiée (voir ADR 0002).
