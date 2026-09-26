@@ -1,6 +1,6 @@
 # Phase 1 — Fondations : rapport
 
-Date : 2026-09-26. Statut : **code et tests locaux terminés** ; résultat de la CI GitHub consigné ci-dessous après exécution.
+Date : 2026-09-26. Statut : **terminée** sous réserve du dernier passage du job d'audit en CI (voir « Vérifications »).
 
 ## Livré
 
@@ -42,6 +42,9 @@ Environnement : Node 22.22, PostgreSQL 16.13 local.
 | gitleaks 8.30.1 (compilé localement) : arbre de travail et historique | aucune fuite ; une fausse clé plantée est bien détectée |
 | `pnpm audit --prod --audit-level high` | aucune vulnérabilité |
 | `docker compose config` | syntaxe valide ; **non exécuté** (pas de moteur Docker dans l'environnement) |
+| CI GitHub, run n° 1 (`1c74669`) | échec : lockfile désynchronisé après avoir figé `@types/node` à la main (erreur de ma part), reproduit en local puis corrigé |
+| CI GitHub, run n° 2 (`f29a6cd`) | **qualité, tests et build : OK**, soit format, lint, typage, dérive, 61 tests sur PostgreSQL 16.15, build. **gitleaks : OK.** Audit : `pnpm audit` OK, mais l'étape de cache de `setup-node` échoue (cache pnpm activé automatiquement par la v5) → corrigé par `package-manager-cache: false` |
+| Rejeu complet de la CI dans un clone propre, sans `.env` | OK |
 
 Couverture des tests d'intégration :
 - **Isolation** : 12 tests (lecture, écriture croisée, mise à jour croisée, disparition du contexte sur la même connexion, rollback, identifiant invalide, droits de colonnes).
