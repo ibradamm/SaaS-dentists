@@ -1,6 +1,13 @@
 import {
+  appointmentSchema,
+  blockWriteResponseSchema,
+  listAppointmentsResponseSchema,
+  setScheduleResponseSchema,
+  slotsResponseSchema,
+  type ChangeAppointmentStatusRequest,
+  type CreateAppointmentRequest,
+  type UpdateAppointmentRequest,
   appointmentTypeSchema,
-  availabilityBlockSchema,
   availabilityResponseSchema,
   listAppointmentTypesResponseSchema,
   listBlocksResponseSchema,
@@ -192,32 +199,59 @@ export const api = {
       `/api/practitioners/${practitionerId}/schedules`,
       listSchedulesResponseSchema,
     ).then((r) => r.periods),
+  /** Nouvelles périodes, et rendez-vous prévus désormais hors horaires (non modifiés). */
   setSchedule: (practitionerId: string, body: SetScheduleRequest) =>
     request(
       'PUT',
       `/api/practitioners/${practitionerId}/schedules`,
-      listSchedulesResponseSchema,
+      setScheduleResponseSchema,
       body,
-    ).then((r) => r.periods),
+    ),
   deleteSchedulePeriod: (practitionerId: string, periodId: string, version: number) =>
     request(
       'DELETE',
       `/api/practitioners/${practitionerId}/schedules/${periodId}?version=${version}`,
-      listSchedulesResponseSchema,
-    ).then((r) => r.periods),
+      setScheduleResponseSchema,
+    ),
 
   listBlocks: (query: { from: string; to: string; practitionerId?: string | undefined }) =>
     request('GET', `/api/availability-blocks?${toQuery(query)}`, listBlocksResponseSchema).then(
       (r) => r.blocks,
     ),
+  /** Indisponibilité créée, et rendez-vous prévus qu'elle recouvre (non modifiés). */
   createBlock: (body: CreateBlockRequest) =>
-    request('POST', '/api/availability-blocks', availabilityBlockSchema, body),
+    request('POST', '/api/availability-blocks', blockWriteResponseSchema, body),
   replaceBlock: (id: string, body: ReplaceBlockRequest) =>
-    request('PUT', `/api/availability-blocks/${id}`, availabilityBlockSchema, body),
+    request('PUT', `/api/availability-blocks/${id}`, blockWriteResponseSchema, body),
   deleteBlock: (id: string, version: number) =>
     request('DELETE', `/api/availability-blocks/${id}?version=${version}`, noContent),
   availability: (query: { from: string; to: string; practitionerId?: string | undefined }) =>
     request('GET', `/api/availability?${toQuery(query)}`, availabilityResponseSchema),
+
+  listAppointments: (query: {
+    from: string;
+    to: string;
+    practitionerId?: string | undefined;
+    includeCancelled?: boolean;
+  }) =>
+    request(
+      'GET',
+      `/api/appointments?${toQuery({ ...query, includeCancelled: query.includeCancelled ? 'true' : undefined })}`,
+      listAppointmentsResponseSchema,
+    ).then((r) => r.appointments),
+  getAppointment: (id: string) => request('GET', `/api/appointments/${id}`, appointmentSchema),
+  createAppointment: (body: CreateAppointmentRequest) =>
+    request('POST', '/api/appointments', appointmentSchema, body),
+  updateAppointment: (id: string, body: UpdateAppointmentRequest) =>
+    request('PATCH', `/api/appointments/${id}`, appointmentSchema, body),
+  changeAppointmentStatus: (id: string, body: ChangeAppointmentStatusRequest) =>
+    request('POST', `/api/appointments/${id}/status`, appointmentSchema, body),
+  patientAppointments: (patientId: string) =>
+    request('GET', `/api/patients/${patientId}/appointments`, listAppointmentsResponseSchema).then(
+      (r) => r.appointments,
+    ),
+  slots: (query: { practitionerId: string; from: string; to: string; durationMinutes: number }) =>
+    request('GET', `/api/availability/slots?${toQuery(query)}`, slotsResponseSchema),
 
   listPatients: (query: {
     q?: string;

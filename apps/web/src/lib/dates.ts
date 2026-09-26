@@ -25,6 +25,40 @@ export function todayIn(timeZone: string, now: Date = new Date()): string {
   return localDateOf(now, timeZone);
 }
 
+/**
+ * Date (AAAA-MM-JJ) et heure murale (HH:mm) d'un instant dans le fuseau donné : sert à
+ * placer un rendez-vous sur la grille et à préremplir sa modification.
+ */
+export function localDateTimeOf(
+  instant: string | number | Date,
+  timeZone: string,
+): { date: string; time: string; minutes: number } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(instant));
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '00';
+  const [hour, minute] = [get('hour'), get('minute')];
+  return {
+    date: `${get('year')}-${get('month')}-${get('day')}`,
+    time: `${hour}:${minute}`,
+    minutes: Number(hour) * 60 + Number(minute),
+  };
+}
+
+/** « HH:mm » pour un nombre de minutes depuis minuit. */
+export function formatMinutes(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 /** Date locale (AAAA-MM-JJ) d'un instant dans le fuseau donné. */
 export function localDateOf(instant: string | number | Date, timeZone: string): string {
   return new Intl.DateTimeFormat('en-CA', {

@@ -1,6 +1,7 @@
 import {
   appointmentTypeSchema,
-  availabilityBlockSchema,
+  blockWriteResponseSchema,
+  setScheduleResponseSchema,
   availabilityResponseSchema,
   createAppointmentTypeRequestSchema,
   createBlockRequestSchema,
@@ -137,9 +138,9 @@ export function schedulingRoutes(
   app.put('/api/practitioners/:id/schedules', { config: manageSchedule }, async (request) => {
     const { id } = params.parse(request.params);
     const body = setScheduleRequestSchema.parse(request.body);
-    return listSchedulesResponseSchema.parse({
-      periods: await schedules.setSchedule(actorOf(request), id, body, requestMeta(request)),
-    });
+    return setScheduleResponseSchema.parse(
+      await schedules.setSchedule(actorOf(request), id, body, requestMeta(request)),
+    );
   });
 
   app.delete(
@@ -148,15 +149,9 @@ export function schedulingRoutes(
     async (request) => {
       const { id, periodId } = periodParams.parse(request.params);
       const { version } = versionQuery.parse(request.query);
-      return listSchedulesResponseSchema.parse({
-        periods: await schedules.deletePeriod(
-          actorOf(request),
-          id,
-          periodId,
-          version,
-          requestMeta(request),
-        ),
-      });
+      return setScheduleResponseSchema.parse(
+        await schedules.deletePeriod(actorOf(request), id, periodId, version, requestMeta(request)),
+      );
     },
   );
 
@@ -174,13 +169,13 @@ export function schedulingRoutes(
   app.post('/api/availability-blocks', { config: manageSchedule }, async (request, reply) => {
     const body = createBlockRequestSchema.parse(request.body);
     const created = await schedules.createBlock(actorOf(request), body, requestMeta(request));
-    return reply.status(201).send(availabilityBlockSchema.parse(created));
+    return reply.status(201).send(blockWriteResponseSchema.parse(created));
   });
 
   app.put('/api/availability-blocks/:id', { config: manageSchedule }, async (request) => {
     const { id } = params.parse(request.params);
     const body = replaceBlockRequestSchema.parse(request.body);
-    return availabilityBlockSchema.parse(
+    return blockWriteResponseSchema.parse(
       await schedules.replaceBlock(actorOf(request), id, body, requestMeta(request)),
     );
   });

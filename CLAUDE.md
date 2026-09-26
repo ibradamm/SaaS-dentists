@@ -21,6 +21,7 @@ Projet : plateforme de gestion de cabinet dentaire. Le plan validé est dans `do
 - Une migration appliquée est immuable. Pas de migration descendante (ADR 0002).
 - Toute conversion heure locale ↔ instant passe par `modules/scheduling/local-time.ts` (heure murale, fuseau du cabinet) ; aucune conversion dans le fuseau du serveur ou du navigateur (ADR 0006).
 - Toute nouvelle table qui référence `patients` est intégrée aux conditions d'annulation d'import (`imports.service.ts`, `revert`) ; le test `schema-catalog` l'impose (ADR 0005).
+- Rendez-vous : la contrainte d'exclusion est la garantie finale contre la double réservation ; toute écriture qui dépend des horaires ou des indisponibilités prend d'abord le verrou du praticien (`lockPractitioners`). Une dérogation (hors horaires, blocage) n'est jamais automatique et toujours tracée (ADR 0007).
 - Les permissions sont vérifiées côté serveur, jamais seulement dans l'interface.
 - Aucun secret dans le code ni dans Git. Aucune donnée sensible dans les logs.
 - Toute action asynchrone ou externe est enfilée dans la transaction métier via `enqueue` (outbox).

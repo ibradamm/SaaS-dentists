@@ -71,7 +71,7 @@ export function WeekOverview({
                 );
                 return (
                   <tr key={day} className="border-b border-slate-100 align-top">
-                    <th scope="row" className="p-2 font-medium capitalize">
+                    <th scope="row" className="p-2 font-medium first-letter:uppercase">
                       {formatDayLabel(day)}
                     </th>
                     <td className="p-2">
@@ -101,7 +101,10 @@ export function WeekOverview({
           </table>
         </div>
       )}
-      <p className="text-xs text-slate-600">Heures du cabinet ({timeZone}).</p>
+      <p className="text-xs text-slate-600">
+        Heures du cabinet ({timeZone}). « Disponible » : horaires, moins les absences, les blocages
+        et les rendez-vous déjà pris.
+      </p>
     </div>
   );
 }

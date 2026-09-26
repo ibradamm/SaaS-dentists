@@ -133,7 +133,7 @@ describe('API praticiens, horaires et disponibilités', () => {
       end: '2026-09-28T11:00',
     });
     expect(created.statusCode).toBe(201);
-    const block = availabilityBlockSchema.parse(created.json());
+    const block = availabilityBlockSchema.parse(created.json<{ block: unknown }>().block);
 
     const availability = availabilityResponseSchema.parse(
       (

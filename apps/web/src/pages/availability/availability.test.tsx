@@ -1,4 +1,5 @@
 import type {
+  Appointment,
   AvailabilityBlock,
   AvailabilityResponse,
   Practitioner,
@@ -79,6 +80,30 @@ const closure: AvailabilityBlock = {
   endAt: '2026-12-25T23:00:00.000Z',
   allDay: true,
   label: 'Noël',
+};
+
+// Rendez-vous du lundi 26 octobre à 9 h (heure d'hiver : 8 h UTC).
+const conflict: Appointment = {
+  id: '01a0de00-0000-7000-8000-00000000f0f0',
+  practitionerId: DR_ALPHA,
+  patient: {
+    id: '01a0de00-0000-7000-8000-00000000a001',
+    lastName: 'Dupont',
+    firstName: 'Léa',
+    primaryPhone: null,
+  },
+  appointmentType: {
+    id: '01a0de00-0000-7000-8000-0000000000d1',
+    name: 'Consultation',
+    color: '#10b981',
+  },
+  startAt: '2026-10-26T08:00:00.000Z',
+  endAt: '2026-10-26T08:30:00.000Z',
+  durationMinutes: 30,
+  status: 'SCHEDULED',
+  note: null,
+  cancellationReason: null,
+  version: 1,
 };
 
 const availability: AvailabilityResponse = {
@@ -176,6 +201,7 @@ describe('disponibilités', () => {
                 version: 1,
               },
             ],
+            conflicts: [],
           },
         };
       },
@@ -215,7 +241,10 @@ describe('disponibilités', () => {
 
   it('absences : fermeture du cabinet réservée au secrétariat, saisie en journées entières', async () => {
     const calls = setup('DENTIST', [practitioner(DR_ALPHA, 'Dr Alpha', ME_ID)], {
-      'POST /api/availability-blocks': () => ({ status: 201, body: block }),
+      'POST /api/availability-blocks': () => ({
+        status: 201,
+        body: { block: { ...block, kind: 'ABSENCE' }, conflicts: [conflict] },
+      }),
     });
     renderApp('/disponibilites');
     fireEvent.click(await screen.findByRole('tab', { name: 'Absences et blocages' }));
@@ -242,6 +271,16 @@ describe('disponibilités', () => {
       startDate: '2026-10-24',
       endDate: '2026-10-31',
     });
+    // Rendez-vous déjà prévus pendant l'absence : listés, jamais modifiés d'office.
+    const warning = await screen.findByRole('alert');
+    expect(warning).toHaveTextContent('1 rendez-vous prévu est pendant cette absence');
+    expect(within(warning).getByRole('link')).toHaveAttribute(
+      'href',
+      `/agenda?date=2026-10-26&rdv=${conflict.id}`,
+    );
+    expect(within(warning).getByRole('link')).toHaveTextContent(
+      '26/10/2026 09:00 · DUPONT Léa · Consultation',
+    );
   });
 
   it('après un nouveau blocage, la semaine n’affiche jamais l’ancienne disponibilité', async () => {
@@ -257,7 +296,7 @@ describe('disponibilités', () => {
       'GET /api/availability': () => ({ status: 200, body: created ? availability : before }),
       'POST /api/availability-blocks': () => {
         created = true;
-        return { status: 201, body: block };
+        return { status: 201, body: { block, conflicts: [] } };
       },
     });
     renderApp('/disponibilites');

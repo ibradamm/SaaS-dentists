@@ -8,7 +8,10 @@ import {
   replaceBlockRequestSchema,
   setScheduleRequestSchema,
   timeToMinutes,
+  type Appointment,
   type AvailabilityBlock,
+  type BlockWriteResponse,
+  type SetScheduleResponse,
   type AvailabilityResponse,
   type BlockTiming,
   type CreateBlockRequest,
@@ -16,15 +19,14 @@ import {
   type SchedulePeriod,
   type SetScheduleRequest,
 } from '@dental/shared';
-import { and, asc, eq, gt, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, sql } from 'drizzle-orm';
 import type { Database, Transaction } from '../../db/client';
 import {
+  appointments,
   availabilityBlocks,
-  clinics,
   practitioners,
   workingIntervals,
   workingSchedules,
-  type AvailabilityBlockRow,
 } from '../../db/schema';
 import { withTenant } from '../../db/tenant';
 import { AppError } from '../../lib/errors';
@@ -33,15 +35,32 @@ import { recordAudit } from '../audit/audit.service';
 import type { RequestMeta, UserActor } from '../auth/auth.types';
 import { authorize, authorizeAny } from '../auth/authorize';
 import { SCHEDULE_PERMISSIONS, authorizeSchedule } from './access';
-import { computeAvailability, type Unavailability } from './availability';
+import {
+  computeAvailability,
+  workingIntervals as weeklyWorkingIntervals,
+  type Unavailability,
+} from './availability';
 import {
   addDays,
   daysBetween,
+  localDateOf,
   localDateTimeToInstant,
   localToday,
   wallClockToInstant,
 } from './local-time';
 import { lockPractitioners } from './locks';
+import { occupiedIntervals, readAppointments, scheduledOverlapping } from '../appointments/queries';
+import { subtract } from './intervals';
+import {
+  checkRange,
+  clinicZone,
+  lockScope,
+  rangeInstants,
+  readBlocks,
+  readPeriods,
+  toBlock,
+  type PeriodWithIntervals,
+} from './queries';
 
 export type SchedulesService = ReturnType<typeof createSchedulesService>;
 
@@ -92,15 +111,6 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
     });
   }
 
-  async function clinicZone(tx: Transaction, clinicId: string): Promise<string> {
-    const [clinic] = await tx
-      .select({ timezone: clinics.timezone })
-      .from(clinics)
-      .where(eq(clinics.id, clinicId));
-    if (!clinic) throw new AppError('NOT_FOUND', 'Cabinet introuvable', 404);
-    return clinic.timezone;
-  }
-
   async function practitionerRow(tx: Transaction, clinicId: string, id: string) {
     const [row] = await tx
       .select({ id: practitioners.id, userId: practitioners.userId, status: practitioners.status })
@@ -120,50 +130,7 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
 
   // --- Horaires de travail -----------------------------------------------------------------
 
-  async function readPeriods(
-    tx: Transaction,
-    clinicId: string,
-    practitionerIds: readonly string[],
-    range?: { from: string; to: string },
-  ) {
-    if (practitionerIds.length === 0) return [];
-    const schedules = await tx
-      .select()
-      .from(workingSchedules)
-      .where(
-        and(
-          eq(workingSchedules.clinicId, clinicId),
-          inArray(workingSchedules.practitionerId, [...practitionerIds]),
-          range ? lte(workingSchedules.validFrom, range.to) : undefined,
-          range
-            ? or(isNull(workingSchedules.validTo), gt(workingSchedules.validTo, range.from))
-            : undefined,
-        ),
-      )
-      .orderBy(asc(workingSchedules.validFrom));
-    const intervals =
-      schedules.length === 0
-        ? []
-        : await tx
-            .select()
-            .from(workingIntervals)
-            .where(
-              and(
-                eq(workingIntervals.clinicId, clinicId),
-                inArray(
-                  workingIntervals.scheduleId,
-                  schedules.map((s) => s.id),
-                ),
-              ),
-            )
-            .orderBy(asc(workingIntervals.weekday), asc(workingIntervals.startMinute));
-    return schedules.map((s) => ({
-      ...s,
-      intervals: intervals.filter((i) => i.scheduleId === s.id),
-    }));
-  }
-
-  function toPeriod(period: Awaited<ReturnType<typeof readPeriods>>[number]): SchedulePeriod {
+  function toPeriod(period: PeriodWithIntervals): SchedulePeriod {
     return {
       id: period.id,
       validFrom: period.validFrom,
@@ -186,6 +153,42 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
   }
 
   /**
+   * Rendez-vous « prévus » à venir (à partir de `fromDate`) qui ne sont plus entièrement dans
+   * les horaires : listés pour décision, jamais modifiés (ADR 0006, R6).
+   */
+  async function scheduleConflicts(
+    tx: Transaction,
+    clinicId: string,
+    practitionerId: string,
+    fromDate: string,
+    zone: string,
+  ): Promise<Appointment[]> {
+    const from = new Date(Math.max(wallClockToInstant(fromDate, 0, zone), now().getTime()));
+    const upcoming = await readAppointments(
+      tx,
+      clinicId,
+      and(
+        eq(appointments.practitionerId, practitionerId),
+        eq(appointments.status, 'SCHEDULED'),
+        gt(appointments.endAt, from),
+      ),
+    );
+    if (upcoming.length === 0) return [];
+    const periods = await readPeriods(tx, clinicId, [practitionerId]);
+    return upcoming.filter((a) => {
+      const start = Date.parse(a.startAt);
+      const end = Date.parse(a.endAt);
+      const working = weeklyWorkingIntervals(
+        periods,
+        addDays(localDateOf(start, zone), -1),
+        localDateOf(end, zone),
+        zone,
+      );
+      return subtract([{ start, end }], working).length > 0;
+    });
+  }
+
+  /**
    * Nouveaux horaires à partir de `validFrom` : remplace la période qui commence ce jour-là,
    * sinon arrête la période en cours à cette date. Les périodes futures sont conservées.
    */
@@ -194,7 +197,7 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
     practitionerId: string,
     input: SetScheduleRequest,
     meta: RequestMeta,
-  ): Promise<SchedulePeriod[]> {
+  ): Promise<SetScheduleResponse> {
     authorizeAny(actor, SCHEDULE_PERMISSIONS);
     const data = setScheduleRequestSchema.parse(input);
     return withTenant(db, actor.clinicId, async (tx) => {
@@ -287,7 +290,17 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
           intervals: { to: data.intervals.length },
         },
       );
-      return (await readPeriods(tx, actor.clinicId, [practitionerId])).map(toPeriod);
+      const zone = await clinicZone(tx, actor.clinicId);
+      return {
+        periods: (await readPeriods(tx, actor.clinicId, [practitionerId])).map(toPeriod),
+        conflicts: await scheduleConflicts(
+          tx,
+          actor.clinicId,
+          practitionerId,
+          data.validFrom,
+          zone,
+        ),
+      };
     });
   }
 
@@ -298,7 +311,7 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
     periodId: string,
     version: number,
     meta: RequestMeta,
-  ): Promise<SchedulePeriod[]> {
+  ): Promise<SetScheduleResponse> {
     authorizeAny(actor, SCHEDULE_PERMISSIONS);
     return withTenant(db, actor.clinicId, async (tx) => {
       await editablePractitioner(tx, actor, practitionerId);
@@ -336,7 +349,17 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
         meta,
         { validFrom: { from: target.validFrom } },
       );
-      return (await readPeriods(tx, actor.clinicId, [practitionerId])).map(toPeriod);
+      const zone = await clinicZone(tx, actor.clinicId);
+      return {
+        periods: (await readPeriods(tx, actor.clinicId, [practitionerId])).map(toPeriod),
+        conflicts: await scheduleConflicts(
+          tx,
+          actor.clinicId,
+          practitionerId,
+          target.validFrom,
+          zone,
+        ),
+      };
     });
   }
 
@@ -371,73 +394,6 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
       throw invalid('Une indisponibilité ne peut pas dépasser un an');
     }
     return { startAt: new Date(start), endAt: new Date(end), allDay: timing.allDay };
-  }
-
-  function toBlock(row: AvailabilityBlockRow): AvailabilityBlock {
-    return {
-      id: row.id,
-      practitionerId: row.practitionerId,
-      kind: row.kind,
-      startAt: row.startAt.toISOString(),
-      endAt: row.endAt.toISOString(),
-      allDay: row.allDay,
-      label: row.label,
-      version: row.version,
-    };
-  }
-
-  /** Verrou d'un praticien, ou de tous ceux du cabinet pour une indisponibilité générale. */
-  async function lockScope(tx: Transaction, clinicId: string, practitionerId: string | null) {
-    const ids = practitionerId
-      ? [practitionerId]
-      : (
-          await tx
-            .select({ id: practitioners.id })
-            .from(practitioners)
-            .where(eq(practitioners.clinicId, clinicId))
-        ).map((p) => p.id);
-    await lockPractitioners(tx, ids);
-  }
-
-  function rangeInstants(zone: string, from: string, to: string) {
-    return {
-      start: new Date(wallClockToInstant(from, 0, zone)),
-      end: new Date(wallClockToInstant(addDays(to, 1), 0, zone)),
-    };
-  }
-
-  function checkRange(from: string, to: string, maxDays: number) {
-    if (to < from) throw invalid('La date de fin précède la date de début');
-    if (daysBetween(from, to) + 1 > maxDays) {
-      throw invalid(`Période trop longue (${maxDays} jours au plus)`);
-    }
-  }
-
-  async function readBlocks(
-    tx: Transaction,
-    clinicId: string,
-    range: { start: Date; end: Date },
-    practitionerIds?: readonly string[],
-  ) {
-    return tx
-      .select()
-      .from(availabilityBlocks)
-      .where(
-        and(
-          eq(availabilityBlocks.clinicId, clinicId),
-          lt(availabilityBlocks.startAt, range.end),
-          gt(availabilityBlocks.endAt, range.start),
-          practitionerIds
-            ? or(
-                isNull(availabilityBlocks.practitionerId),
-                practitionerIds.length > 0
-                  ? inArray(availabilityBlocks.practitionerId, [...practitionerIds])
-                  : undefined,
-              )
-            : undefined,
-        ),
-      )
-      .orderBy(asc(availabilityBlocks.startAt), asc(availabilityBlocks.id));
   }
 
   async function listBlocks(
@@ -477,7 +433,7 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
     actor: UserActor,
     input: CreateBlockRequest,
     meta: RequestMeta,
-  ): Promise<AvailabilityBlock> {
+  ): Promise<BlockWriteResponse> {
     authorizeAny(actor, SCHEDULE_PERMISSIONS);
     const data = createBlockRequestSchema.parse(input);
     return withTenant(db, actor.clinicId, async (tx) => {
@@ -485,7 +441,6 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
       else authorizeSchedule(actor, null);
       const times = blockInstants(await clinicZone(tx, actor.clinicId), data);
       await lockScope(tx, actor.clinicId, data.practitionerId);
-      // Phase 5 : lister ici les rendez-vous en conflit, sans les modifier (ADR 0006, R6).
       const [row] = await tx
         .insert(availabilityBlocks)
         .values({
@@ -505,7 +460,16 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
         meta,
         { practitionerId: { to: data.practitionerId }, ...blockAuditChanges(null, row!) },
       );
-      return toBlock(row!);
+      return {
+        block: toBlock(row!),
+        // Rendez-vous en conflit : listés pour décision, jamais modifiés (ADR 0006, R6).
+        conflicts: await scheduledOverlapping(
+          tx,
+          actor.clinicId,
+          data.practitionerId ? [data.practitionerId] : null,
+          { start: times.startAt, end: times.endAt },
+        ),
+      };
     });
   }
 
@@ -525,7 +489,7 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
     id: string,
     input: ReplaceBlockRequest,
     meta: RequestMeta,
-  ): Promise<AvailabilityBlock> {
+  ): Promise<BlockWriteResponse> {
     authorizeAny(actor, SCHEDULE_PERMISSIONS);
     const data = replaceBlockRequestSchema.parse(input);
     return withTenant(db, actor.clinicId, async (tx) => {
@@ -557,7 +521,15 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
         meta,
         blockAuditChanges(before, row),
       );
-      return toBlock(row);
+      return {
+        block: toBlock(row),
+        conflicts: await scheduledOverlapping(
+          tx,
+          actor.clinicId,
+          before.practitionerId ? [before.practitionerId] : null,
+          { start: times.startAt, end: times.endAt },
+        ),
+      };
     });
   }
 
@@ -621,7 +593,10 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
               .orderBy(asc(practitioners.displayName), asc(practitioners.id))
           ).map((p) => p.id);
       const periods = await readPeriods(tx, actor.clinicId, ids, { from: q.from, to: q.to });
-      const blocks = await readBlocks(tx, actor.clinicId, rangeInstants(zone, q.from, q.to), ids);
+      const range = rangeInstants(zone, q.from, q.to);
+      const blocks = await readBlocks(tx, actor.clinicId, range, ids);
+      // Rendez-vous qui occupent leur créneau (prévus, honorés) : retirés des disponibilités.
+      const booked = await occupiedIntervals(tx, actor.clinicId, ids, range);
       const toIso = (list: { start: number; end: number }[]) =>
         list.map((i) => ({
           start: new Date(i.start).toISOString(),
@@ -647,7 +622,12 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
           return {
             practitionerId: id,
             working: toIso(result.working),
-            available: toIso(result.available),
+            available: toIso(
+              subtract(
+                result.available,
+                booked.filter((b) => b.practitionerId === id),
+              ),
+            ),
           };
         }),
         blocks: blocks.map(toBlock),

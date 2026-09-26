@@ -49,16 +49,18 @@ describe("isolation des tables d'agenda (RLS)", () => {
         { name: 'Contrôle', durationMinutes: 30, color: '#10b981' },
         META,
       );
-      const [period] = await schedules.setSchedule(
-        admin,
-        practitioner.id,
-        {
-          validFrom: '2026-09-28',
-          basePeriod: null,
-          intervals: [{ weekday: 1, start: '09:00', end: '12:00' }],
-        },
-        META,
-      );
+      const [period] = (
+        await schedules.setSchedule(
+          admin,
+          practitioner.id,
+          {
+            validFrom: '2026-09-28',
+            basePeriod: null,
+            intervals: [{ weekday: 1, start: '09:00', end: '12:00' }],
+          },
+          META,
+        )
+      ).periods;
       await schedules.createBlock(
         admin,
         {

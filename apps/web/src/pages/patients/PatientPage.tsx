@@ -15,6 +15,7 @@ import { ApiError, api, errorMessage } from '../../lib/api';
 import { can, useMe } from '../../lib/auth';
 import { formatDate, formatDateTime, formatPhone } from '../../lib/format';
 import { RELATIONSHIP_LABELS } from './labels';
+import { PatientAppointments } from './PatientAppointments';
 
 const patientKey = (id: string) => ['patient', id] as const;
 
@@ -360,6 +361,12 @@ export function PatientPage() {
       {toggleArchive.isError && <Alert>{errorMessage(toggleArchive.error)}</Alert>}
       <IdentitySection key={`${p.id}-${p.version}`} patient={p} editable={editable} />
       <ContactsSection patient={p} editable={editable} />
+      {can(me, 'appointment.read') && (
+        <PatientAppointments
+          patientId={p.id}
+          canBook={can(me, 'appointment.write') && p.status === 'ACTIVE'}
+        />
+      )}
       {can(me, 'patient.medical.read') && (
         <MedicalNotesSection patientId={p.id} canWrite={can(me, 'patient.medical.write')} />
       )}

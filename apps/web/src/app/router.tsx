@@ -7,6 +7,7 @@ import { UsersPage } from '../pages/UsersPage';
 import { NewPatientPage } from '../pages/patients/NewPatientPage';
 import { PatientPage } from '../pages/patients/PatientPage';
 import { PatientsPage } from '../pages/patients/PatientsPage';
+import { AgendaPage } from '../pages/agenda/AgendaPage';
 import { AvailabilityPage } from '../pages/availability/AvailabilityPage';
 import { AppointmentTypesPage } from '../pages/settings/AppointmentTypesPage';
 import { ClinicProfilePage } from '../pages/settings/ClinicProfilePage';
@@ -59,7 +60,10 @@ export const routes: RouteObject[] = [
           },
           {
             element: <RequirePermission permission="appointment.read" />,
-            children: [{ path: '/disponibilites', element: <AvailabilityPage /> }],
+            children: [
+              { path: '/agenda', element: <AgendaPage /> },
+              { path: '/disponibilites', element: <AvailabilityPage /> },
+            ],
           },
           {
             element: <RequirePermission permission="clinic.settings.manage" />,

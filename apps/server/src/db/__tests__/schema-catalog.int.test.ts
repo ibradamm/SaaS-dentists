@@ -36,6 +36,8 @@ describe('catalogue du schéma', () => {
         'working_schedules',
         'working_intervals',
         'availability_blocks',
+        'appointment_statuses',
+        'appointments',
       ]),
     );
     const unprotected = rows
@@ -83,17 +85,37 @@ describe('catalogue du schéma', () => {
       WHERE c.contype = 'f' AND c.confrelid = 'public.patients'::regclass
       ORDER BY 1`);
     expect(rows).toEqual([
+      { table: 'appointments', on_delete: 'r' }, // bloque : exclu de l'annulation
       { table: 'patient_contacts', on_delete: 'c' }, // suppression en cascade
       { table: 'patient_medical_notes', on_delete: 'r' }, // bloque : exclu de l'annulation
     ]);
   });
 
-  it("les horaires sont protégés du chevauchement par des contraintes d'exclusion", async () => {
+  it("horaires et rendez-vous sont protégés du chevauchement par des contraintes d'exclusion", async () => {
     const { rows } = await t.ownerPool.query<{ name: string }>(`
       SELECT conname AS name FROM pg_constraint WHERE contype = 'x' ORDER BY 1`);
     expect(rows.map((r) => r.name)).toEqual(
-      expect.arrayContaining(['working_intervals_no_overlap', 'working_schedules_no_overlap']),
+      expect.arrayContaining([
+        'appointments_no_patient_overlap',
+        'appointments_no_practitioner_overlap',
+        'working_intervals_no_overlap',
+        'working_schedules_no_overlap',
+      ]),
     );
+  });
+
+  it('le rôle applicatif ne peut ni supprimer un rendez-vous ni modifier occupies_slot', async () => {
+    const { rows } = await t.ownerPool.query<{ check: string; granted: boolean }>(
+      `SELECT c AS check, CASE c
+         WHEN 'delete' THEN has_table_privilege($1, 'public.appointments', 'DELETE')
+         WHEN 'update_occupies' THEN has_column_privilege($1, 'public.appointments', 'occupies_slot', 'UPDATE')
+         WHEN 'update_patient' THEN has_column_privilege($1, 'public.appointments', 'patient_id', 'UPDATE')
+         WHEN 'write_statuses' THEN has_table_privilege($1, 'public.appointment_statuses', 'INSERT')
+       END AS granted
+       FROM unnest(ARRAY['delete', 'update_occupies', 'update_patient', 'write_statuses']) AS c`,
+      [DB_APP_ROLE],
+    );
+    expect(rows.filter((r) => r.granted).map((r) => r.check)).toEqual([]);
   });
 
   it('le rôle applicatif ne peut créer aucun objet dans le schéma public', async () => {

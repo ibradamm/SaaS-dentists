@@ -37,7 +37,7 @@ L'architecture reste multi-cabinets : chaque donnée métier est rattachée à u
 
 | Invariant | Mécanisme (dans le code et la base, pas seulement dans l'interface) |
 |---|---|
-| I1. Aucune double réservation d'un praticien | Contrainte d'exclusion PostgreSQL (`EXCLUDE USING gist`) sur (praticien, plage horaire) et verrou transactionnel par praticien (Phase 5) |
+| I1. Aucune double réservation d'un praticien ni d'un patient | Contraintes d'exclusion PostgreSQL (`EXCLUDE USING gist`) sur (praticien, plage) et (patient, plage), limitées aux statuts qui occupent le créneau ; verrou transactionnel par praticien pour les contrôles d'horaires et d'absences (ADR 0007) |
 | I2. Aucune fuite entre cabinets | `clinic_id` partout, clés étrangères composites, Row-Level Security activée et forcée sur toutes les tables, filtre explicite dans les services (ADR 0001) |
 | I3. Permissions vérifiées côté serveur | `authorize()` dans chaque service et permission déclarée par route (ADR 0003) ; l'interface masque seulement |
 | I4. Actions sensibles tracées | Journal d'audit en ajout seul, écrit dans la même transaction que l'action |
@@ -90,7 +90,7 @@ Règles :
 | Patients | `GET/POST /api/patients`, `GET/PATCH /api/patients/:id`, archivage, contacts, notes médicales, doublons | Fait |
 | Import | `GET/POST /api/imports`, lignes, rapport, validation, annulation, abandon | Fait |
 | Praticiens et disponibilités | `GET/POST /api/practitioners`, `PATCH /:id`, archivage ; `GET/POST /api/appointment-types`, `PATCH /:id`, archivage ; `GET/PUT /api/practitioners/:id/schedules`, `DELETE …/schedules/:periodId` ; `GET/POST /api/availability-blocks`, `PUT/DELETE /:id` ; `GET /api/availability?from&to&practitionerId` | Fait (ADR 0006) |
-| Rendez-vous | `GET /api/appointments?from&to&practitionerId`, création, modification ou déplacement (version), annulation, statut | Phase 5 |
+| Rendez-vous | `GET /api/appointments?from&to&practitionerId&includeCancelled`, `GET /api/appointments/:id`, `POST /api/appointments` (confirmation explicite `allowOutsideAvailability`), `PATCH /:id` (déplacement, version), `POST /:id/status` (honoré, patient absent, annulé, correction) ; `GET /api/patients/:id/appointments` ; `GET /api/availability/slots` ; conflits renvoyés par les écritures d'horaires et d'indisponibilités | Fait (ADR 0007) |
 | Finances | actes à encaisser, paiements, annulation de paiement, synthèses par période | Phase 7 |
 | Tableau de bord et statistiques | indicateurs du jour, séries temporelles | Phase 8 |
 | Audit | `GET /api/audit-logs` (filtres, pagination) | Phase 9 |
@@ -122,7 +122,7 @@ Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, 
 | Téléphones | libphonenumber-js (métadonnées complètes) | Normalisation E.164 fiable |
 | Interface | React 19, Vite 8, react-router 8, TanStack Query 5, Tailwind 4 | Application de gestion sans besoin de rendu serveur |
 | Import de fichiers | papaparse (CSV), read-excel-file (xlsx), lecture dans le navigateur | ADR 0005 |
-| Agenda (Phase 5) | FullCalendar, paquets MIT uniquement ; alignement v6/v7 à trancher | Vues jour et semaine, glisser-déposer |
+| Agenda | Grille maison (React, `Intl`), sans bibliothèque de calendrier | FullCalendar écarté : fuseau nommé du cabinet seulement avec un greffon Luxon (> 200 ko) ; pas de glisser-déposer au MVP (ADR 0007, section 7) |
 | Dates et fuseaux | Luxon (serveur) ; `Intl` dans l'interface pour l'affichage dans le fuseau du cabinet | Fuseaux IANA, changements d'heure (ADR 0006) |
 | Graphiques (Phase 8) | Recharts | Intégration React |
 | Tests | Vitest, Testing Library, Playwright (E2E en Phase 10) | |
@@ -140,7 +140,7 @@ apps/server/src/
   db/            client, withTenant, schéma Drizzle, migrations, exécuteur, bootstrap, CLI
   jobs/          file de tâches (pg-boss), gestionnaires
   lib/           erreurs, chiffrement, métadonnées de requête
-  modules/       audit, auth, users, clinic, patients, imports (puis scheduling, appointments, finance…)
+  modules/       audit, auth, users, clinic, patients, imports, scheduling, appointments (puis finance…)
 apps/web/src/    app (routeur, gardes), pages, composants, lib (client API, auth)
 packages/shared/ contrats Zod, catalogue des permissions
 infra/           docker-compose de développement
@@ -175,12 +175,13 @@ docs/            ARCHITECTURE.md, adr/, phases/, future/
 | `appointment_types` | Type de rendez-vous : nom (unique parmi les actifs), durée (5 à 480 min), couleur, version | Fait |
 | `working_schedules`, `working_intervals` | Périodes d'horaires datées par praticien, plages hebdomadaires en heure locale ; chevauchements refusés par contraintes d'exclusion | Fait |
 | `availability_blocks` | Absences et créneaux bloqués, d'un praticien ou de tout le cabinet, en instants UTC | Fait |
-| `appointments` | Rendez-vous : praticien, patient, type, début et fin, statut (prévu, honoré, absent, annulé), note administrative, version | Phase 5 |
+| `appointment_statuses` | Statuts (prévu, honoré, patient absent, annulé) et leur effet sur le créneau (`occupies_slot`) ; commune à tous les cabinets, lecture seule pour l'application | Fait |
+| `appointments` | Rendez-vous : praticien, patient, type, début et fin (grille de 5 min, 5 à 480 min), statut, note administrative, motif d'annulation, version ; jamais supprimés | Fait |
 | `charges` | Montants dus (acte ou rendez-vous) | Phase 7 |
 | `payments` | Paiements non modifiables : une erreur s'annule et se ressaisit | Phase 7 |
 | `expenses` | Dépenses (option désactivée par défaut) | Phase 7 |
 
-**Contrainte anti double réservation (Phase 5)** : `EXCLUDE USING gist (practitioner_id WITH =, tstzrange(start_at, end_at, '[)') WITH &&) WHERE (status <> 'CANCELLED')`. Elle a été vérifiée sur PostgreSQL 16 en Phase 0 ; l'extension `btree_gist` est installée depuis la Phase 4 (migration 0010). Elle fera l'objet d'un test de concurrence. Règles préparées pour les rendez-vous : ADR 0006, section 7.
+**Contraintes anti double réservation (migration 0012)** : `EXCLUDE USING gist (practitioner_id WITH =, tstzrange(start_at, end_at, '[)') WITH &&) WHERE (occupies_slot)`, et la même sur `patient_id`. `occupies_slot` est recalculée depuis le statut par un déclencheur et n'est pas modifiable par l'application : ajouter un statut ne demande qu'une ligne dans `appointment_statuses`. Tests de concurrence réels (service et HTTP) : ADR 0007 et rapport de la Phase 5.
 
 ---
 
@@ -254,9 +255,9 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | 0 | Analyse et architecture | — | Fait |
 | 1 | Fondations : monorepo, PostgreSQL, migrations, isolation, file de tâches, CI | 1, 2 | Fait |
 | 2 | Authentification, rôles, permissions, utilisateurs, paramètres minimaux du cabinet | 3, 4, 6 | Fait |
-| 3 | Patients : dossier administratif, contacts, notes médicales restreintes, recherche, doublons, **import CSV / Excel** | 7 | Fait (en attente de validation) |
-| 4 | Cabinet et disponibilités : profil du cabinet, praticiens (un ou plusieurs), types de rendez-vous, horaires hebdomadaires datés, absences et blocages, calcul des disponibilités (pas de table d'horaires d'ouverture, ADR 0006) | 5, 10, 11 | Fait (en attente de validation) |
-| 5 | Rendez-vous et agenda : création, déplacement, annulation, statuts, anti double réservation, vues jour et semaine, historique patient | 8, 9 | À faire |
+| 3 | Patients : dossier administratif, contacts, notes médicales restreintes, recherche, doublons, **import CSV / Excel** | 7 | Fait |
+| 4 | Cabinet et disponibilités : profil du cabinet, praticiens (un ou plusieurs), types de rendez-vous, horaires hebdomadaires datés, absences et blocages, calcul des disponibilités (pas de table d'horaires d'ouverture, ADR 0006) | 5, 10, 11 | Fait |
+| 5 | Rendez-vous et agenda : création, déplacement, annulation, statuts, anti double réservation, vues jour et semaine, historique patient (ADR 0007) | 8, 9 | Fait (en attente de validation) |
 | 6 | Applications web dentiste et secrétaire : parcours quotidiens par rôle, ergonomie, accessibilité, téléphone et tablette | 12, 13 | À faire |
 | 7 | Paiements et revenus encaissés : actes à encaisser, paiements, annulations, impayés, périodes | 14 | À faire |
 | 8 | Tableau de bord et statistiques | 15, 16 | À faire |
@@ -278,7 +279,7 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 
 | Risque | Parade |
 |---|---|
-| Double réservation (deux secrétaires en même temps) | Contrainte d'exclusion et verrou par praticien ; test de concurrence |
+| Double réservation (deux secrétaires en même temps) | Contraintes d'exclusion et verrou par praticien ; tests de concurrence (service, HTTP) et tests par mutation (Phase 5) |
 | Erreurs de fuseau ou de changement d'heure | UTC en base, Luxon, tests sur les dates de changement d'heure |
 | Import de mauvaise qualité (colonnes mal associées) | Aperçu avant validation, rapport ligne par ligne, annulation d'un import non modifié |
 | Perte de données | Restauration à un instant donné, sauvegardes hors site, tests de restauration |

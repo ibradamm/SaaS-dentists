@@ -19,6 +19,7 @@ import { PG_FOREIGN_KEY_VIOLATION, PG_UNIQUE_VIOLATION, pgErrorCode } from '../.
 import { recordAudit } from '../audit/audit.service';
 import type { RequestMeta, UserActor } from '../auth/auth.types';
 import { authorize } from '../auth/authorize';
+import { hasFutureScheduled } from '../appointments/queries';
 
 export type PractitionersService = ReturnType<typeof createPractitionersService>;
 
@@ -196,7 +197,17 @@ export function createPractitionersService(deps: { db: Database; now?: () => Dat
     authorize(actor, 'clinic.settings.manage');
     return withTenant(db, actor.clinicId, async (tx) => {
       await practitionerById(tx, actor.clinicId, id);
-      // Phase 5 : refuser l'archivage d'un praticien qui a des rendez-vous futurs (ADR 0006, R7).
+      if (
+        status === 'ARCHIVED' &&
+        (await hasFutureScheduled(tx, actor.clinicId, { practitionerId: id }, now()))
+      ) {
+        // ADR 0006, R7 : ses rendez-vous doivent d'abord être déplacés ou annulés.
+        throw new AppError(
+          'CONFLICT',
+          'Ce praticien a des rendez-vous prévus à venir : déplacez-les ou annulez-les avant de l’archiver',
+          409,
+        );
+      }
       const updated = await tx
         .update(practitioners)
         .set({

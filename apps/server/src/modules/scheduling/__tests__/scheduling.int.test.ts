@@ -189,12 +189,14 @@ describe('praticiens, horaires, indisponibilités et disponibilités', () => {
 
   describe('horaires', () => {
     it('le dentiste gère ses horaires, pas ceux d’un confrère ; la secrétaire gère tous les agendas', async () => {
-      const periods = await schedules.setSchedule(
-        dentistA,
-        practitionerA,
-        { validFrom: '2026-09-26', basePeriod: null, intervals: WEEKDAYS },
-        META,
-      );
+      const periods = (
+        await schedules.setSchedule(
+          dentistA,
+          practitionerA,
+          { validFrom: '2026-09-26', basePeriod: null, intervals: WEEKDAYS },
+          META,
+        )
+      ).periods;
       expect(periods).toEqual([
         expect.objectContaining({ validFrom: '2026-09-26', validTo: null, version: 1 }),
       ]);
@@ -221,31 +223,35 @@ describe('praticiens, horaires, indisponibilités et disponibilités', () => {
       const [current] = await schedules.listSchedules(secretary, practitionerA);
       // À partir du 2 novembre : plus de mercredi.
       const noWednesday = WEEKDAYS.filter((i) => i.weekday !== 3);
-      let periods = await schedules.setSchedule(
-        dentistA,
-        practitionerA,
-        {
-          validFrom: '2026-11-02',
-          basePeriod: { id: current!.id, version: current!.version },
-          intervals: noWednesday,
-        },
-        META,
-      );
+      let periods = (
+        await schedules.setSchedule(
+          dentistA,
+          practitionerA,
+          {
+            validFrom: '2026-11-02',
+            basePeriod: { id: current!.id, version: current!.version },
+            intervals: noWednesday,
+          },
+          META,
+        )
+      ).periods;
       expect(periods.map((p) => [p.validFrom, p.validTo])).toEqual([
         ['2026-09-26', '2026-11-02'],
         ['2026-11-02', null],
       ]);
       // Changement intermédiaire du 12 octobre : s'insère jusqu'au 2 novembre.
-      periods = await schedules.setSchedule(
-        dentistA,
-        practitionerA,
-        {
-          validFrom: '2026-10-12',
-          basePeriod: { id: periods[0]!.id, version: periods[0]!.version },
-          intervals: [{ weekday: 1, start: '08:00', end: '12:00' }],
-        },
-        META,
-      );
+      periods = (
+        await schedules.setSchedule(
+          dentistA,
+          practitionerA,
+          {
+            validFrom: '2026-10-12',
+            basePeriod: { id: periods[0]!.id, version: periods[0]!.version },
+            intervals: [{ weekday: 1, start: '08:00', end: '12:00' }],
+          },
+          META,
+        )
+      ).periods;
       expect(periods.map((p) => [p.validFrom, p.validTo])).toEqual([
         ['2026-09-26', '2026-10-12'],
         ['2026-10-12', '2026-11-02'],
@@ -253,29 +259,33 @@ describe('praticiens, horaires, indisponibilités et disponibilités', () => {
       ]);
       // Même date : les plages de la période sont remplacées.
       const oct = periods[1]!;
-      periods = await schedules.setSchedule(
-        dentistA,
-        practitionerA,
-        {
-          validFrom: '2026-10-12',
-          basePeriod: { id: oct.id, version: oct.version },
-          intervals: [{ weekday: 2, start: '08:00', end: '12:00' }],
-        },
-        META,
-      );
+      periods = (
+        await schedules.setSchedule(
+          dentistA,
+          practitionerA,
+          {
+            validFrom: '2026-10-12',
+            basePeriod: { id: oct.id, version: oct.version },
+            intervals: [{ weekday: 2, start: '08:00', end: '12:00' }],
+          },
+          META,
+        )
+      ).periods;
       expect(periods[1]).toMatchObject({
         id: oct.id,
         version: oct.version + 1,
         intervals: [{ weekday: 2, start: '08:00', end: '12:00' }],
       });
       // Suppression de la période future : la précédente la recouvre.
-      periods = await schedules.deletePeriod(
-        dentistA,
-        practitionerA,
-        periods[1]!.id,
-        periods[1]!.version,
-        META,
-      );
+      periods = (
+        await schedules.deletePeriod(
+          dentistA,
+          practitionerA,
+          periods[1]!.id,
+          periods[1]!.version,
+          META,
+        )
+      ).periods;
       expect(periods.map((p) => [p.validFrom, p.validTo])).toEqual([
         ['2026-09-26', '2026-11-02'],
         ['2026-11-02', null],
@@ -362,18 +372,20 @@ describe('praticiens, horaires, indisponibilités et disponibilités', () => {
 
   describe('indisponibilités', () => {
     it('saisie en heure locale convertie en UTC ; heure inexistante refusée', async () => {
-      const block = await schedules.createBlock(
-        dentistA,
-        {
-          practitionerId: practitionerA,
-          kind: 'BLOCK',
-          allDay: false,
-          start: '2026-09-28T10:00',
-          end: '2026-09-28T11:00',
-          label: 'Réunion fournisseur',
-        },
-        META,
-      );
+      const block = (
+        await schedules.createBlock(
+          dentistA,
+          {
+            practitionerId: practitionerA,
+            kind: 'BLOCK',
+            allDay: false,
+            start: '2026-09-28T10:00',
+            end: '2026-09-28T11:00',
+            label: 'Réunion fournisseur',
+          },
+          META,
+        )
+      ).block;
       expect(block).toMatchObject({
         startAt: '2026-09-28T08:00:00.000Z',
         endAt: '2026-09-28T09:00:00.000Z',
@@ -407,18 +419,20 @@ describe('praticiens, horaires, indisponibilités et disponibilités', () => {
     });
 
     it('journées entières de part et d’autre du changement d’heure', async () => {
-      const block = await schedules.createBlock(
-        secretary,
-        {
-          practitionerId: practitionerB,
-          kind: 'ABSENCE',
-          allDay: true,
-          startDate: '2026-10-24',
-          endDate: '2026-10-26',
-          label: 'Congés',
-        },
-        META,
-      );
+      const block = (
+        await schedules.createBlock(
+          secretary,
+          {
+            practitionerId: practitionerB,
+            kind: 'ABSENCE',
+            allDay: true,
+            startDate: '2026-10-24',
+            endDate: '2026-10-26',
+            label: 'Congés',
+          },
+          META,
+        )
+      ).block;
       // Du 24 à 0 h (UTC+2) au 27 à 0 h (UTC+1).
       expect(block).toMatchObject({
         startAt: '2026-10-23T22:00:00.000Z',
@@ -442,7 +456,7 @@ describe('praticiens, horaires, indisponibilités et disponibilités', () => {
       await expect(
         schedules.createBlock(dentistA, { ...closure, practitionerId: practitionerB }, META),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-      const created = await schedules.createBlock(secretary, closure, META);
+      const created = (await schedules.createBlock(secretary, closure, META)).block;
       expect(created.practitionerId).toBeNull();
       // Le dentiste ne peut ni modifier ni supprimer une fermeture du cabinet.
       await expect(
@@ -451,29 +465,33 @@ describe('praticiens, horaires, indisponibilités et disponibilités', () => {
     });
 
     it('modification avec verrou optimiste, puis suppression', async () => {
-      const block = await schedules.createBlock(
-        dentistA,
-        {
-          practitionerId: practitionerA,
-          kind: 'BLOCK',
-          allDay: false,
-          start: '2026-10-06T16:00',
-          end: '2026-10-06T17:00',
-        },
-        META,
-      );
-      const moved = await schedules.replaceBlock(
-        dentistA,
-        block.id,
-        {
-          version: 1,
-          kind: 'ABSENCE',
-          allDay: false,
-          start: '2026-10-06T15:00',
-          end: '2026-10-06T18:00',
-        },
-        META,
-      );
+      const block = (
+        await schedules.createBlock(
+          dentistA,
+          {
+            practitionerId: practitionerA,
+            kind: 'BLOCK',
+            allDay: false,
+            start: '2026-10-06T16:00',
+            end: '2026-10-06T17:00',
+          },
+          META,
+        )
+      ).block;
+      const moved = (
+        await schedules.replaceBlock(
+          dentistA,
+          block.id,
+          {
+            version: 1,
+            kind: 'ABSENCE',
+            allDay: false,
+            start: '2026-10-06T15:00',
+            end: '2026-10-06T18:00',
+          },
+          META,
+        )
+      ).block;
       expect(moved).toMatchObject({
         kind: 'ABSENCE',
         version: 2,

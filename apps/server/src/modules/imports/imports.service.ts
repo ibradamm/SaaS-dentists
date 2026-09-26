@@ -12,6 +12,7 @@ import { and, asc, desc, eq, inArray, isNotNull, lt, notExists, or, sql } from '
 import { v7 as uuidv7 } from 'uuid';
 import type { Database, Transaction } from '../../db/client';
 import {
+  appointments,
   clinics,
   importBatches,
   importRows,
@@ -545,6 +546,13 @@ export function createImportsService(deps: { db: Database; now?: () => Date }) {
                 .select({ one: sql`1` })
                 .from(patientMedicalNotes)
                 .where(eq(patientMedicalNotes.patientId, patients.id)),
+            ),
+            // Un patient qui a (ou a eu) un rendez-vous n'est jamais supprimé (ADR 0007).
+            notExists(
+              tx
+                .select({ one: sql`1` })
+                .from(appointments)
+                .where(eq(appointments.patientId, patients.id)),
             ),
           ),
         )

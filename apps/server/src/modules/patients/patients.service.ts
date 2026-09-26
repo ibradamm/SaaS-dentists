@@ -38,6 +38,7 @@ import type { SecretBox } from '../../lib/secret-box';
 import { recordAudit } from '../audit/audit.service';
 import type { RequestMeta, UserActor } from '../auth/auth.types';
 import { authorize } from '../auth/authorize';
+import { hasFutureScheduled } from '../appointments/queries';
 import {
   cleanName,
   normalizeForSearch,
@@ -377,6 +378,16 @@ export function createPatientsService(deps: {
   ) {
     authorize(actor, 'patient.write');
     return withTenant(db, actor.clinicId, async (tx) => {
+      if (
+        status === 'ARCHIVED' &&
+        (await hasFutureScheduled(tx, actor.clinicId, { patientId: id }, now()))
+      ) {
+        throw new AppError(
+          'CONFLICT',
+          'Ce patient a des rendez-vous prévus à venir : annulez-les avant d’archiver sa fiche',
+          409,
+        );
+      }
       const updated = await tx
         .update(patients)
         .set({

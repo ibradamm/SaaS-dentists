@@ -1,4 +1,4 @@
-import type { PatientDetail, PatientSummary, Role } from '@dental/shared';
+import type { Appointment, PatientDetail, PatientSummary, Role } from '@dental/shared';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { me, mockApi, renderApp } from '../../test/render';
@@ -46,7 +46,31 @@ function detail(overrides: Partial<PatientDetail> = {}): PatientDetail {
   };
 }
 
-const session = (role: Role) => ({ 'GET /api/auth/me': () => ({ status: 200, body: me(role) }) });
+const CLINIC = {
+  id: '01a0de00-0000-7000-8000-0000000000c1',
+  name: 'Cabinet du Parc',
+  timezone: 'Europe/Paris',
+  locale: 'fr-FR',
+  currency: 'EUR',
+  countryCode: 'FR',
+  addressLine1: null,
+  addressLine2: null,
+  postalCode: null,
+  city: null,
+  phone: null,
+  email: null,
+};
+
+// Session, plus ce que la section « Rendez-vous » de la fiche charge (aucun rendez-vous).
+const session = (role: Role, appointments: Appointment[] = []) => ({
+  'GET /api/auth/me': () => ({ status: 200, body: me(role) }),
+  'GET /api/clinic': () => ({ status: 200, body: CLINIC }),
+  'GET /api/practitioners': () => ({ status: 200, body: { practitioners: [] } }),
+  [`GET /api/patients/${PATIENT_ID}/appointments`]: () => ({
+    status: 200,
+    body: { appointments },
+  }),
+});
 
 describe('liste des patients', () => {
   it('affiche la liste, recherche côté serveur et masque les actions non autorisées', async () => {
@@ -316,5 +340,81 @@ describe('fiche patient', () => {
       relationship: 'GUARDIAN',
       label: 'Mère',
     });
+  });
+});
+
+describe('rendez-vous du patient', () => {
+  const appointment = (overrides: Partial<Appointment>): Appointment => ({
+    id: '01a0de00-0000-7000-8000-00000000f001',
+    practitionerId: '01a0de00-0000-7000-8000-0000000000a1',
+    patient: { id: PATIENT_ID, lastName: 'Dupont', firstName: 'Léa', primaryPhone: null },
+    appointmentType: {
+      id: '01a0de00-0000-7000-8000-0000000000d1',
+      name: 'Consultation',
+      color: '#10b981',
+    },
+    startAt: '2026-10-05T07:00:00.000Z',
+    endAt: '2026-10-05T07:30:00.000Z',
+    durationMinutes: 30,
+    status: 'SCHEDULED',
+    note: null,
+    cancellationReason: null,
+    version: 1,
+    ...overrides,
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('à venir et historique séparés, en heure du cabinet ; lien de prise de rendez-vous', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-28T08:00:00Z'));
+    mockApi({
+      ...session('SECRETARY', [
+        // Réponse du serveur : du plus récent au plus ancien.
+        appointment({
+          id: '01a0de00-0000-7000-8000-00000000f003',
+          startAt: '2026-10-12T07:00:00.000Z',
+          endAt: '2026-10-12T07:30:00.000Z',
+        }),
+        appointment({}),
+        appointment({
+          id: '01a0de00-0000-7000-8000-00000000f002',
+          startAt: '2026-09-21T12:00:00.000Z',
+          endAt: '2026-09-21T12:30:00.000Z',
+          status: 'NO_SHOW',
+        }),
+      ]),
+      [`GET /api/patients/${PATIENT_ID}`]: () => ({ status: 200, body: detail() }),
+    });
+    renderApp(`/patients/${PATIENT_ID}`);
+    const upcoming = await screen.findByRole('list', { name: 'Rendez-vous à venir' });
+    expect(
+      within(upcoming)
+        .getAllByRole('link')
+        .map((a) => a.textContent),
+    ).toEqual(['lundi 5 octobre 2026 à 09:00', 'lundi 12 octobre 2026 à 09:00']);
+    const history = screen.getByRole('list', { name: 'Historique des rendez-vous' });
+    expect(within(history).getByText('Patient absent')).toBeInTheDocument();
+    expect(within(history).getByRole('link')).toHaveAttribute(
+      'href',
+      '/agenda?date=2026-09-21&rdv=01a0de00-0000-7000-8000-00000000f002',
+    );
+    expect(screen.getByRole('link', { name: 'Prendre rendez-vous' })).toHaveAttribute(
+      'href',
+      `/agenda?nouveau=1&patient=${PATIENT_ID}`,
+    );
+  });
+
+  it('patient archivé : historique visible, pas de prise de rendez-vous', async () => {
+    mockApi({
+      ...session('SECRETARY'),
+      [`GET /api/patients/${PATIENT_ID}`]: () => ({
+        status: 200,
+        body: detail({ status: 'ARCHIVED' }),
+      }),
+    });
+    renderApp(`/patients/${PATIENT_ID}`);
+    expect(await screen.findByText('Aucun rendez-vous à venir.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Prendre rendez-vous' })).toBeNull();
   });
 });

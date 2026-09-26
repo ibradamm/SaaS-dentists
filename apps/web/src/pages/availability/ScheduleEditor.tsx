@@ -1,5 +1,6 @@
 import {
   setScheduleRequestSchema,
+  type Appointment,
   type Practitioner,
   type SchedulePeriod,
   type WeeklyIntervalInput,
@@ -9,6 +10,7 @@ import { useState } from 'react';
 import { Alert, Badge, Button, Loading, TextField } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
 import { WEEKDAY_LABELS, addDays, formatLocalDate, todayIn } from '../../lib/dates';
+import { ConflictsNotice } from '../agenda/ConflictsNotice';
 
 const scheduleKey = (id: string) => ['schedules', id] as const;
 
@@ -56,6 +58,11 @@ export function ScheduleEditor({
   });
   const [validFrom, setValidFrom] = useState(today);
   const [draft, setDraft] = useState<WeeklyIntervalInput[] | null>(null);
+  // Rendez-vous devenus hors horaires, selon l'action qui les a signalés.
+  const [conflicts, setConflicts] = useState<{ from: 'save' | 'remove'; list: Appointment[] }>({
+    from: 'save',
+    list: [],
+  });
 
   const covering =
     periods.data?.find(
@@ -63,11 +70,16 @@ export function ScheduleEditor({
     ) ?? null;
   const intervals: WeeklyIntervalInput[] = draft ?? covering?.intervals ?? [];
 
-  const onSaved = (updated: SchedulePeriod[]) => {
-    queryClient.setQueryData(scheduleKey(practitioner.id), updated);
+  const onSaved = (
+    from: 'save' | 'remove',
+    updated: { periods: SchedulePeriod[]; conflicts: Appointment[] },
+  ) => {
+    queryClient.setQueryData(scheduleKey(practitioner.id), updated.periods);
     setDraft(null);
-    // Voir BlocksPanel : jamais d'anciennes disponibilités affichées après une modification.
-    queryClient.removeQueries({ queryKey: ['availability', practitioner.id] });
+    setConflicts({ from, list: updated.conflicts });
+    // Voir BlocksPanel : jamais d'anciennes disponibilités affichées après une modification
+    // (semaine du praticien comme agenda du cabinet).
+    queryClient.removeQueries({ queryKey: ['availability'] });
   };
   const save = useMutation({
     mutationFn: () =>
@@ -76,12 +88,12 @@ export function ScheduleEditor({
         basePeriod: covering ? { id: covering.id, version: covering.version } : null,
         intervals,
       }),
-    onSuccess: onSaved,
+    onSuccess: (updated) => onSaved('save', updated),
   });
   const remove = useMutation({
     mutationFn: (period: SchedulePeriod) =>
       api.deleteSchedulePeriod(practitioner.id, period.id, period.version),
-    onSuccess: onSaved,
+    onSuccess: (updated) => onSaved('remove', updated),
   });
 
   const validation = setScheduleRequestSchema.safeParse({ validFrom, basePeriod: null, intervals });
@@ -140,6 +152,13 @@ export function ScheduleEditor({
           })}
         </ul>
         {remove.isError && <Alert>{errorMessage(remove.error)}</Alert>}
+        {conflicts.from === 'remove' && (
+          <ConflictsNotice
+            conflicts={conflicts.list}
+            timeZone={timeZone}
+            reason="désormais en dehors des horaires"
+          />
+        )}
       </section>
 
       {canEdit && (
@@ -211,6 +230,13 @@ export function ScheduleEditor({
           {problem && draft && <Alert>{problem}</Alert>}
           {save.isError && <Alert>{errorMessage(save.error)}</Alert>}
           {save.isSuccess && draft === null && <Alert tone="success">Horaires enregistrés.</Alert>}
+          {draft === null && conflicts.from === 'save' && (
+            <ConflictsNotice
+              conflicts={conflicts.list}
+              timeZone={timeZone}
+              reason="désormais en dehors des horaires"
+            />
+          )}
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={draft === null || save.isPending || problem !== null || validFrom < today}

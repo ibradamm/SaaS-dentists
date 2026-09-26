@@ -11,7 +11,8 @@ Fonctionnalités disponibles :
 - comptes, rôles (administrateur, dentiste, secrétaire), double authentification ;
 - dossiers patients : recherche, doublons, téléphones, archivage, notes médicales restreintes et chiffrées ;
 - import de patients depuis un fichier CSV ou Excel (menu Patients → « Importer un fichier », administrateur ; voir ADR 0005) ;
-- cabinet (profil, praticiens, types de rendez-vous) et disponibilités par praticien : horaires datés, absences, blocages, dans le fuseau du cabinet (ADR 0006).
+- cabinet (profil, praticiens, types de rendez-vous) et disponibilités par praticien : horaires datés, absences, blocages, dans le fuseau du cabinet (ADR 0006) ;
+- agenda des rendez-vous (menu « Agenda ») : vues jour et semaine, création avec créneaux libres proposés, déplacement, statuts (prévu, honoré, patient absent, annulé), historique sur la fiche patient ; double réservation impossible, y compris en base ; hors horaires seulement après confirmation explicite, tracée (ADR 0007).
 
 Architecture et décisions : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/adr/`](docs/adr). Avancement : [`docs/phases/`](docs/phases).
 

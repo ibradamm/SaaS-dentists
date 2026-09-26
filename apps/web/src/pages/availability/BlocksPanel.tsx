@@ -1,4 +1,5 @@
 import type {
+  Appointment,
   AvailabilityBlock,
   BlockKind,
   CreateBlockRequest,
@@ -9,6 +10,7 @@ import { useState, type FormEvent } from 'react';
 import { Alert, Badge, Button, Loading, SelectField, TextField } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
 import { addDays, todayIn } from '../../lib/dates';
+import { ConflictsNotice } from '../agenda/ConflictsNotice';
 import { BLOCK_KIND_LABELS, formatBlockPeriod } from './format';
 
 interface FormState {
@@ -57,6 +59,7 @@ export function BlocksPanel({
     label: '',
   };
   const [form, setForm] = useState<FormState>(empty);
+  const [saved, setSaved] = useState<{ kind: BlockKind; conflicts: Appointment[] } | null>(null);
   const refresh = async () => {
     // Disponibilités supprimées du cache (et non marquées périmées) : la semaine ne doit jamais
     // afficher l'état d'avant la modification, même le temps d'un rechargement.
@@ -81,8 +84,9 @@ export function BlocksPanel({
           };
       return api.createBlock(body);
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setForm(empty);
+      setSaved({ kind: result.block.kind, conflicts: result.conflicts });
       await refresh();
     },
   });
@@ -95,7 +99,10 @@ export function BlocksPanel({
     event.preventDefault();
     create.mutate();
   }
-  const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
+  const set = (patch: Partial<FormState>) => {
+    setForm({ ...form, ...patch });
+    setSaved(null);
+  };
   const canDelete = (b: AvailabilityBlock) => (b.practitionerId === null ? canEditClinic : canEdit);
 
   return (
@@ -152,6 +159,13 @@ export function BlocksPanel({
         >
           <h2 className="text-lg font-semibold">Ajouter une absence ou un blocage</h2>
           {create.isError && <Alert>{errorMessage(create.error)}</Alert>}
+          {saved && (
+            <ConflictsNotice
+              conflicts={saved.conflicts}
+              timeZone={timeZone}
+              reason={saved.kind === 'ABSENCE' ? 'pendant cette absence' : 'sur ce créneau bloqué'}
+            />
+          )}
           <div className="grid gap-3 sm:grid-cols-3">
             <SelectField
               label="Type"

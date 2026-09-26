@@ -78,6 +78,20 @@
       "when": 1790455016942,
       "tag": "0010_scheduling_security",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790460955362,
+      "tag": "0011_appointments_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790460962092,
+      "tag": "0012_appointments_security",
+      "breakpoints": true
     }
   ]
 }

@@ -101,17 +101,18 @@ export function Alert({
   tone = 'error',
   children,
 }: {
-  tone?: 'error' | 'info' | 'success';
+  tone?: 'error' | 'info' | 'success' | 'warning';
   children: ReactNode;
 }) {
   const styles = {
     error: 'border-red-200 bg-red-50 text-red-800',
     info: 'border-sky-200 bg-sky-50 text-sky-900',
     success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    warning: 'border-amber-300 bg-amber-50 text-amber-950',
   }[tone];
   return (
     <div
-      role={tone === 'error' ? 'alert' : 'status'}
+      role={tone === 'error' || tone === 'warning' ? 'alert' : 'status'}
       className={`rounded-md border px-3 py-2 text-sm ${styles}`}
     >
       {children}
@@ -176,12 +177,13 @@ export function Badge({
   tone = 'neutral',
 }: {
   children: ReactNode;
-  tone?: 'neutral' | 'info' | 'warning';
+  tone?: 'neutral' | 'info' | 'warning' | 'success';
 }) {
   const styles = {
     neutral: 'bg-slate-100 text-slate-700',
     info: 'bg-sky-100 text-sky-900',
     warning: 'bg-amber-100 text-amber-900',
+    success: 'bg-emerald-100 text-emerald-900',
   }[tone];
   return (
     <span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${styles}`}>
