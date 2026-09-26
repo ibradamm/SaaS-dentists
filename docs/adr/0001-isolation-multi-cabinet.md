@@ -1,7 +1,7 @@
 # ADR 0001 — Isolation des données entre cabinets
 
 - Statut : accepté (Phase 1, 2026-09-26)
-- Contexte : ARCHITECTURE.md, invariant I4
+- Contexte : ARCHITECTURE.md, invariant I2
 
 ## Décision
 

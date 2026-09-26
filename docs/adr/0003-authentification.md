@@ -1,7 +1,7 @@
 # ADR 0003 — Authentification, sessions et permissions
 
 - Statut : accepté (Phase 2, 2026-09-26)
-- Contexte : ARCHITECTURE.md sections I et J ; réponses O9 du 2026-09-26 (secrétaire : pas de chiffre d'affaires, pas d'annulation de paiement, gestion de l'agenda de tout praticien)
+- Contexte : ARCHITECTURE.md sections F et G ; réponses O9 du 2026-09-26 (secrétaire : pas de chiffre d'affaires, pas d'annulation de paiement, gestion de l'agenda de tout praticien)
 
 ## Décisions
 
@@ -47,7 +47,7 @@ S'ils le deviennent, des tables seront ajoutées par migration, et le catalogue 
 
 Contrôle en deux points :
 - la route déclare la permission (refus 403 immédiat) ;
-- le service appelle `authorize()`, pour que les autres appelants (outils de l'agent, tâches) soient couverts.
+- le service appelle `authorize()`, pour que les autres appelants (tâches de fond, futurs points d'entrée) soient couverts.
 
 ### Isolation des tables d'authentification sans fonction `SECURITY DEFINER`
 `users` est commune à la plateforme, et la connexion a lieu avant de connaître le cabinet. Plutôt que des fonctions privilégiées, trois variables de contexte supplémentaires, sur le modèle de `app.clinic_id`, ouvrent chacune une fenêtre minimale :

@@ -10,7 +10,7 @@ import {
 } from './permissions';
 
 /**
- * Matrice attendue, recopiée à la main depuis docs/ARCHITECTURE.md (section I.2, réponses O9
+ * Matrice attendue, recopiée à la main depuis docs/ARCHITECTURE.md (section F, réponses O9
  * du 2026-09-26), indépendamment de l'implémentation. Toute modification de droits doit
  * modifier les deux : c'est voulu.
  *                                  ADMIN  DENTIST SECRETARY
@@ -28,11 +28,10 @@ const EXPECTED: Record<Permission, [boolean, boolean, boolean]> = {
   'payment.write': [true, true, true],
   'payment.void': [true, true, false],
   'finance.reports.read': [true, true, false],
-  'conversation.read': [true, true, true],
-  'conversation.reply': [true, true, true],
   'clinic.settings.manage': [true, false, false],
   'user.manage': [true, false, false],
   'audit.read': [true, false, false],
+  'data.import': [true, false, false],
 };
 
 const cases = PERMISSIONS.flatMap((permission) =>

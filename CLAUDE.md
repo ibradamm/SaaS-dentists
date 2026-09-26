@@ -21,4 +21,5 @@ Projet : plateforme de gestion de cabinet dentaire. Le plan validé est dans `do
 - Une migration appliquée est immuable. Pas de migration descendante (ADR 0002).
 - Les permissions sont vérifiées côté serveur, jamais seulement dans l'interface.
 - Aucun secret dans le code ni dans Git. Aucune donnée sensible dans les logs.
-- Les actions externes (WhatsApp, Google, rappels) sont enfilées dans la transaction métier via `enqueue` (outbox).
+- Toute action asynchrone ou externe est enfilée dans la transaction métier via `enqueue` (outbox).
+- Périmètre actuel : SaaS de gestion du cabinet uniquement. Aucune fonctionnalité WhatsApp, agent IA ou Google Calendar (extensions futures, `docs/future/`).

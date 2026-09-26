@@ -1,5 +1,7 @@
 # Plateforme de gestion de cabinet dentaire
 
+Périmètre actuel : SaaS de gestion du cabinet pour le personnel (ADR 0004). WhatsApp, l'agent IA et Google Calendar sont des extensions futures (`docs/future/`).
+
 Monorepo TypeScript :
 - API (Fastify) et worker (pg-boss) ;
 - interface web (React) ;

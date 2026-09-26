@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Catalogue des permissions et matrice des rôles système (docs/ARCHITECTURE.md, section I).
+ * Catalogue des permissions et matrice des rôles système (docs/ARCHITECTURE.md, section F).
  * Source unique : le serveur l'applique, l'interface s'en sert uniquement pour masquer les
  * actions non permises. Une permission absente de ce catalogue ne peut pas exister.
  */
@@ -19,11 +19,11 @@ export const PERMISSIONS = [
   'payment.write',
   'payment.void',
   'finance.reports.read',
-  'conversation.read',
-  'conversation.reply',
   'clinic.settings.manage',
   'user.manage',
   'audit.read',
+  // Import en masse de données (fichiers CSV / Excel) : opération sensible, administrateur.
+  'data.import',
 ] as const;
 
 export const permissionSchema = z.enum(PERMISSIONS);
@@ -53,8 +53,6 @@ const DENTIST_PERMISSIONS: readonly Permission[] = [
   'payment.write',
   'payment.void',
   'finance.reports.read',
-  'conversation.read',
-  'conversation.reply',
 ];
 
 // Réponses validées le 2026-09-26 (question O9) : pas de chiffre d'affaires, pas d'annulation
@@ -67,8 +65,6 @@ const SECRETARY_PERMISSIONS: readonly Permission[] = [
   'patient.write',
   'payment.read',
   'payment.write',
-  'conversation.read',
-  'conversation.reply',
 ];
 
 export const ROLE_PERMISSIONS: Readonly<Record<Role, ReadonlySet<Permission>>> = {
