@@ -2,5 +2,7 @@ export * from './auth';
 export * from './clinic';
 export * from './errors';
 export * from './health';
+export * from './imports';
+export * from './patients';
 export * from './permissions';
 export * from './users';
