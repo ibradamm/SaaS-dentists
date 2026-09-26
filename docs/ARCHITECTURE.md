@@ -1,6 +1,6 @@
 # Plateforme de gestion de cabinet dentaire — Phase 0 : analyse et architecture
 
-> Statut : **proposition en attente de validation**. Aucun code applicatif n'a été écrit.
+> Statut : **validé le 2026-09-26**. Phase 1 réalisée : voir `docs/phases/phase-1.md`. Les écarts ultérieurs au plan sont tracés dans `docs/adr/`.
 > Date : 2026-09-26. Toute information marquée **[À VÉRIFIER]** n'a pas pu être confirmée
 > sur la documentation officielle depuis l'environnement de développement (accès réseau restreint).
 
@@ -589,8 +589,8 @@ Deux ajustements recommandés à l'ordre initial :
 | Phase | Contenu | Critère de fin (tests exécutés et verts) |
 |---|---|---|
 | 0 | Analyse et architecture (ce document) | Validation par vous |
-| 1 | Fondations : monorepo, config Zod, logger, PostgreSQL local, Drizzle + premières migrations (`clinics`, `users`, `audit_logs`), `withTenant` + RLS, pg-boss, squelettes API/worker/web, CI, gitleaks, `.env.example`, `docker-compose` | Migration up/down sur base vierge ; test d'isolation RLS à 2 cabinets ; `/health` ; lint + typecheck + tests en CI |
-| 2 | Authentification et RBAC : login/logout, sessions, Argon2id, TOTP, rate limiting, CSRF, rôles/permissions, gestion des utilisateurs, écran de connexion | Tests d'auth (succès, échec, verrouillage, expiration) ; matrice de permissions testée exhaustivement (chaque permission × chaque rôle) |
+| 1 | Fondations : monorepo, config Zod, logger, PostgreSQL local, Drizzle + premières migrations (`clinics`, `audit_logs`), `withTenant` + RLS, pg-boss, squelettes API/worker/web, CI, gitleaks, `.env.example`, `docker-compose` | Migrations appliquées sur base vierge, idempotentes et sûres en concurrence (ADR 0002 : pas de migration descendante) ; test d'isolation RLS à 2 cabinets ; `/health` ; lint + typecheck + tests en CI |
+| 2 | Authentification et RBAC : tables `users`, `clinic_memberships`, `roles`, `permissions`, `sessions` (déplacées depuis la Phase 1 pour être conçues ensemble), login/logout, sessions, Argon2id, TOTP, rate limiting, CSRF, rôles/permissions, gestion des utilisateurs, écran de connexion | Tests d'auth (succès, échec, verrouillage, expiration) ; matrice de permissions testée exhaustivement (chaque permission × chaque rôle) |
 | 3 | Patients : CRUD, recherche, contacts (famille), séparation administratif/médical, audit | Tests API + permissions ; test d'accès refusé au médical pour SECRETARY |
 | 4 | Rendez-vous : types, horaires, blocages, calcul de disponibilités, hold/confirm/move/cancel, contrainte d'exclusion, expiration des holds, agenda web jour/semaine | Tests de concurrence (réservations simultanées → une seule réussit) ; changements d'heure ; dentiste absent ; secrétaire qui modifie |
 | 5 | Google Calendar : compte de service, miroir, import optionnel, réconciliation, renouvellement des canaux | Tests contre un fake + tests de contrat ; puis test réel sur un calendrier de test (identifiants fournis par vous) ; tests d'erreur Google |

@@ -1,0 +1,84 @@
+import { z } from 'zod';
+
+/**
+ * Lecture et validation de la configuration. Chaque point d'entrée (API, worker, migrations,
+ * bootstrap) déclare uniquement les variables dont il a besoin. Une variable manquante ou
+ * invalide empêche le démarrage ; le message cite le nom de la variable, jamais sa valeur
+ * (qui peut être un secret).
+ */
+
+export const appEnvSchema = z.enum(['development', 'test', 'staging', 'production']);
+export type AppEnv = z.infer<typeof appEnvSchema>;
+
+const postgresUrl = z.url({ protocol: /^postgres(ql)?$/, error: 'URL PostgreSQL attendue' });
+
+const logLevel = z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']);
+
+const baseShape = {
+  APP_ENV: appEnvSchema,
+  LOG_LEVEL: logLevel.default('info'),
+};
+
+const databaseShape = {
+  DATABASE_URL: postgresUrl,
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+};
+
+const apiSchema = z.object({
+  ...baseShape,
+  ...databaseShape,
+  API_HOST: z.string().min(1).default('127.0.0.1'),
+  API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  // Nombre de proxys de confiance devant l'API (Caddy en production = 1). 0 = aucun.
+  API_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+});
+
+const workerSchema = z.object({ ...baseShape, ...databaseShape });
+
+const migrateSchema = z.object({
+  ...baseShape,
+  DATABASE_MIGRATION_URL: postgresUrl,
+});
+
+const bootstrapSchema = z.object({
+  ...baseShape,
+  DATABASE_ADMIN_URL: postgresUrl,
+  DATABASE_NAME: z.string().regex(/^[a-z_][a-z0-9_]{0,62}$/, 'nom de base invalide'),
+  DATABASE_OWNER_PASSWORD: z.string().min(12, '12 caractères minimum'),
+  DATABASE_APP_PASSWORD: z.string().min(12, '12 caractères minimum'),
+});
+
+export type ApiConfig = z.infer<typeof apiSchema>;
+export type WorkerConfig = z.infer<typeof workerSchema>;
+export type MigrateConfig = z.infer<typeof migrateSchema>;
+export type BootstrapConfig = z.infer<typeof bootstrapSchema>;
+
+export class ConfigError extends Error {
+  constructor(readonly issues: string[]) {
+    super(`Configuration invalide :\n${issues.map((i) => `  - ${i}`).join('\n')}`);
+    this.name = 'ConfigError';
+  }
+}
+
+type Env = Record<string, string | undefined>;
+
+function parse<T extends z.ZodType>(schema: T, env: Env): z.infer<T> {
+  // Une variable définie mais vide est traitée comme absente (cas fréquent dans les fichiers .env).
+  const cleaned = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== ''));
+  const result = schema.safeParse(cleaned);
+  if (!result.success) {
+    throw new ConfigError(
+      result.error.issues.map(
+        (issue) => `${issue.path.join('.') || '(racine)'} : ${issue.message}`,
+      ),
+    );
+  }
+  return result.data;
+}
+
+export const loadApiConfig = (env: Env = process.env): ApiConfig => parse(apiSchema, env);
+export const loadWorkerConfig = (env: Env = process.env): WorkerConfig => parse(workerSchema, env);
+export const loadMigrateConfig = (env: Env = process.env): MigrateConfig =>
+  parse(migrateSchema, env);
+export const loadBootstrapConfig = (env: Env = process.env): BootstrapConfig =>
+  parse(bootstrapSchema, env);

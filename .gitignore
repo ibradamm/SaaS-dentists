@@ -1,0 +1,33 @@
+# Dépendances et builds
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# Secrets : ne jamais committer
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*service-account*.json
+credentials*.json
+
+# Données locales (cluster PostgreSQL de dev, sauvegardes)
+.data/
+*.dump
+*.sql.gz
+
+# Tests E2E
+playwright-report/
+test-results/
+
+# Divers
+*.log
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

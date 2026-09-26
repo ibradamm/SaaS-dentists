@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790438817251,
+      "tag": "0000_app_functions",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790438824397,
+      "tag": "0001_clinics_and_audit_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790438836180,
+      "tag": "0002_tenant_security",
+      "breakpoints": true
+    }
+  ]
+}

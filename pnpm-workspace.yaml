@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Les scripts d'installation des dépendances sont bloqués par défaut (pnpm 10).
+# Seuls les paquets listés ici peuvent en exécuter un.
+onlyBuiltDependencies:
+  - esbuild

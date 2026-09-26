@@ -1,0 +1,6 @@
+# Détection de secrets (gitleaks). Règles par défaut, sans exception : un faux positif se
+# traite au cas par cas avec un commentaire « gitleaks:allow » justifié sur la ligne concernée.
+title = "dental-platform"
+
+[extend]
+useDefault = true

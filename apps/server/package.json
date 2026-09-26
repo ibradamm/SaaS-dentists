@@ -1,0 +1,36 @@
+{
+  "name": "@dental/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:api": "tsx watch --env-file-if-exists=../../.env src/main-api.ts",
+    "dev:worker": "tsx watch --env-file-if-exists=../../.env src/main-worker.ts",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run",
+    "db:bootstrap": "tsx --env-file-if-exists=../../.env src/db/cli/bootstrap.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file-if-exists=../../.env src/db/cli/migrate.ts",
+    "db:seed": "tsx --env-file-if-exists=../../.env src/db/cli/seed.ts"
+  },
+  "dependencies": {
+    "@dental/shared": "workspace:*",
+    "@fastify/helmet": "13.1.1",
+    "drizzle-orm": "0.45.3",
+    "fastify": "5.12.5",
+    "pg": "8.23.0",
+    "pg-boss": "12.35.0",
+    "pino": "10.3.1",
+    "uuid": "14.0.2",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "@types/pg": "8.23.1",
+    "drizzle-kit": "0.31.11",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15",
+    "vitest": "5.0.2"
+  }
+}
