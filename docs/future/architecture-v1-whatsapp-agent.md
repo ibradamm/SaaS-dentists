@@ -1,4 +1,4 @@
-> **Document archivé (2026-09-27).** Architecture v1, qui incluait WhatsApp, l'agent IA et Google Calendar. Ces éléments sont **hors du périmètre actuel** (docs/adr/0004-recentrage-perimetre.md).
+> **Document archivé (2026-09-26).** Architecture v1, qui incluait WhatsApp, l'agent IA et Google Calendar. Ces éléments sont **hors du périmètre actuel** (docs/adr/0004-recentrage-perimetre.md).
 >
 > Le document est conservé tel quel comme conception de référence pour ces extensions futures. L'architecture en vigueur est `docs/ARCHITECTURE.md` (v2). Les sections décrivant le SaaS lui-même (isolation, sécurité, patients, agenda, finances) y ont été reprises et tenues à jour ; en cas de divergence, la v2 fait foi.
 

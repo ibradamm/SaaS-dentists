@@ -14,7 +14,7 @@ export interface MockCall {
 }
 type Handler = (call: MockCall) => { status: number; body?: unknown };
 
-/** Remplace fetch par des réponses déterministes, indexées par « MÉTHODE /chemin ». */
+/** Remplace fetch par des réponses déterministes, indexées par « MÉTHODE /chemin[?requête] ». */
 export function mockApi(handlers: Record<string, Handler>) {
   const calls: MockCall[] = [];
   vi.stubGlobal(
@@ -27,7 +27,9 @@ export function mockApi(handlers: Record<string, Handler>) {
         body: typeof init.body === 'string' ? JSON.parse(init.body) : undefined,
       };
       calls.push(call);
-      const handler = handlers[`${call.method} ${url}`];
+      // Clé exacte d'abord (avec la chaîne de requête), sinon le chemin seul.
+      const handler =
+        handlers[`${call.method} ${url}`] ?? handlers[`${call.method} ${url.split('?')[0]}`];
       const result = handler
         ? handler(call)
         : { status: 404, body: { error: { code: 'NOT_FOUND', message: 'Introuvable' } } };

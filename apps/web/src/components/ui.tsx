@@ -4,6 +4,7 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from 'react';
 
 /*
@@ -141,5 +142,50 @@ export function AuthLayout({ title, children }: { title: string; children: React
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8">
       <Card title={title}>{children}</Card>
     </main>
+  );
+}
+
+export function TextArea({
+  label,
+  hint,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; hint?: string }) {
+  const id = useId();
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium text-slate-800">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        {...props}
+        aria-describedby={hint ? `${id}-hint` : undefined}
+        className="min-h-24 rounded-md border border-slate-300 bg-white px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-sky-700"
+      />
+      {hint && (
+        <p id={`${id}-hint`} className="text-xs text-slate-600">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function Badge({
+  children,
+  tone = 'neutral',
+}: {
+  children: ReactNode;
+  tone?: 'neutral' | 'info' | 'warning';
+}) {
+  const styles = {
+    neutral: 'bg-slate-100 text-slate-700',
+    info: 'bg-sky-100 text-sky-900',
+    warning: 'bg-amber-100 text-amber-900',
+  }[tone];
+  return (
+    <span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${styles}`}>
+      {children}
+    </span>
   );
 }

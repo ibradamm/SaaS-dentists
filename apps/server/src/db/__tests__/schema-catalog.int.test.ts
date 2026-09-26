@@ -61,6 +61,21 @@ describe('catalogue du schéma', () => {
     });
   });
 
+  it("toute table référençant patients est prise en compte par l'annulation d'import", async () => {
+    // L'annulation d'un import supprime des patients (imports.service.ts, revert). Une nouvelle
+    // table liée aux patients (rendez-vous, paiements…) doit être ajoutée à ses conditions,
+    // puis à cette liste.
+    const { rows } = await t.ownerPool.query<{ table: string; on_delete: string }>(`
+      SELECT c.conrelid::regclass::text AS table, c.confdeltype::text AS on_delete
+      FROM pg_constraint c
+      WHERE c.contype = 'f' AND c.confrelid = 'public.patients'::regclass
+      ORDER BY 1`);
+    expect(rows).toEqual([
+      { table: 'patient_contacts', on_delete: 'c' }, // suppression en cascade
+      { table: 'patient_medical_notes', on_delete: 'r' }, // bloque : exclu de l'annulation
+    ]);
+  });
+
   it('le rôle applicatif ne peut créer aucun objet dans le schéma public', async () => {
     const { rows } = await t.ownerPool.query<{ can_create: boolean }>(
       `SELECT has_schema_privilege($1, 'public', 'CREATE') AS can_create`,

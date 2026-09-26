@@ -13,6 +13,7 @@
   "dependencies": {
     "@dental/shared": "workspace:*",
     "@tanstack/react-query": "5.104.0",
+    "libphonenumber-js": "1.13.14",
     "papaparse": "5.7.0",
     "qrcode": "1.5.4",
     "react": "19.3.0",

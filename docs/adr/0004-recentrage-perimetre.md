@@ -1,6 +1,6 @@
 # ADR 0004 — Recentrage du périmètre sur le SaaS de gestion du cabinet
 
-- Statut : accepté (2026-09-27), décision du porteur du projet
+- Statut : accepté (2026-09-26), décision du porteur du projet
 - Remplace : le périmètre de l'architecture v1 (archivée dans `docs/future/`)
 
 ## Décision
@@ -9,7 +9,7 @@ Le produit est construit d'abord comme un **SaaS de gestion de cabinet dentaire,
 
 **Retiré du développement :** WhatsApp (webhooks, intégration Meta, messages, modèles de messages), l'agent conversationnel IA, et Google Calendar, absent de la liste des priorités.
 
-## Changements appliqués (2026-09-27)
+## Changements appliqués (2026-09-26)
 
 | Élément | Traitement |
 |---|---|

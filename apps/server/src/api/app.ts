@@ -7,12 +7,16 @@ import type pg from 'pg';
 import type { Logger } from '../config/logger';
 import type { AuthService } from '../modules/auth/auth.service';
 import type { ClinicService } from '../modules/clinic/clinic.service';
+import type { ImportsService } from '../modules/imports/imports.service';
+import type { PatientsService } from '../modules/patients/patients.service';
 import type { UsersService } from '../modules/users/users.service';
 import { registerAuth } from './auth-plugin';
 import { errorHandler, notFoundHandler } from './error-handler';
 import { authRoutes } from './routes/auth';
 import { clinicRoutes } from './routes/clinic';
 import { healthRoutes } from './routes/health';
+import { importsRoutes } from './routes/imports';
+import { patientsRoutes } from './routes/patients';
 import { usersRoutes } from './routes/users';
 
 export interface RateLimits {
@@ -34,6 +38,8 @@ export interface AppDependencies {
   auth: AuthService;
   users: UsersService;
   clinic: ClinicService;
+  patients: PatientsService;
+  imports: ImportsService;
   webOrigin: string;
   secureCookies: boolean;
   rateLimits?: RateLimits;
@@ -75,6 +81,8 @@ export async function buildApp(deps: AppDependencies): Promise<FastifyInstance> 
   authRoutes(app, { auth: deps.auth, cookies, sensitiveRateLimit: limits.sensitive });
   usersRoutes(app, { users: deps.users });
   clinicRoutes(app, { clinic: deps.clinic });
+  patientsRoutes(app, { patients: deps.patients });
+  importsRoutes(app, { imports: deps.imports });
 
   return app;
 }

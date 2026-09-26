@@ -57,17 +57,23 @@ const staleVersion = () =>
   );
 const noteContext = (noteId: string) => `patient_medical_notes:${noteId}`;
 
+// Résumé d'une fiche, à lire avec la jointure `primaryContact`. Jointure plutôt que sous-requête :
+// dans une requête sur une seule table, Drizzle écrit les colonnes sans préfixe de table, et une
+// référence à patients.id dans une sous-requête y désignerait la colonne id du contact.
 const summaryColumns = {
   id: patients.id,
   lastName: patients.lastName,
   firstName: patients.firstName,
   birthDate: patients.birthDate,
   status: patients.status,
-  primaryPhone: sql<string | null>`(
-    SELECT pc.phone_e164 FROM patient_contacts pc
-    WHERE pc.patient_id = ${patients.id} AND pc.is_primary
-  )`,
+  primaryPhone: patientContacts.phoneE164,
 };
+// Au plus un contact principal par patient (index unique partiel) : pas de ligne dupliquée.
+const primaryContact = and(
+  eq(patientContacts.clinicId, patients.clinicId),
+  eq(patientContacts.patientId, patients.id),
+  eq(patientContacts.isPrimary, true),
+);
 
 function toContact(row: typeof patientContacts.$inferSelect): Contact {
   return {
@@ -217,6 +223,7 @@ export function createPatientsService(deps: {
       const rows = await tx
         .select(summaryColumns)
         .from(patients)
+        .leftJoin(patientContacts, primaryContact)
         .where(where)
         .orderBy(asc(patients.lastName), asc(patients.firstName), asc(patients.id))
         .limit(q.limit)
@@ -236,6 +243,7 @@ export function createPatientsService(deps: {
       tx
         .select(summaryColumns)
         .from(patients)
+        .leftJoin(patientContacts, primaryContact)
         .where(
           and(
             eq(patients.clinicId, actor.clinicId),

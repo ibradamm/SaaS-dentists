@@ -7,6 +7,11 @@ Monorepo TypeScript :
 - interface web (React) ;
 - base PostgreSQL 16 avec isolation des données par cabinet.
 
+Fonctionnalités disponibles :
+- comptes, rôles (administrateur, dentiste, secrétaire), double authentification ;
+- dossiers patients : recherche, doublons, téléphones, archivage, notes médicales restreintes et chiffrées ;
+- import de patients depuis un fichier CSV ou Excel (menu Patients → « Importer un fichier », administrateur ; voir ADR 0005).
+
 Architecture et décisions : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/adr/`](docs/adr). Avancement : [`docs/phases/`](docs/phases).
 
 ## Prérequis
@@ -71,3 +76,4 @@ docs/           architecture, décisions (ADR), rapports de phase
 - Toute action protégée appelle `authorize()` dans son service ; la route déclare aussi la permission (`config.access`).
 - Toute table du schéma public reçoit RLS, `FORCE` et une politique ; le test `schema-catalog` l'impose.
 - Une migration appliquée n'est jamais modifiée (voir ADR 0002).
+- Toute nouvelle table liée aux patients doit être prise en compte par l'annulation d'import ; le test `schema-catalog` l'impose.

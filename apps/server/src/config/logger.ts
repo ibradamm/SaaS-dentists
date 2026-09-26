@@ -1,4 +1,4 @@
-import { pino, type Logger } from 'pino';
+import { pino, type DestinationStream, type Logger } from 'pino';
 import type { AppEnv } from './env';
 
 /**
@@ -18,13 +18,43 @@ export const REDACTED_PATHS = [
   '*.body',
 ];
 
-export function createLogger(options: { service: string; env: AppEnv; level: string }): Logger {
-  return pino({
-    level: options.level,
-    base: { service: options.service, env: options.env },
-    timestamp: pino.stdTimeFunctions.isoTime,
-    redact: { paths: REDACTED_PATHS, censor: '[REDACTED]' },
-  });
+interface LoggedRequest {
+  method?: string;
+  url?: string;
+  host?: string;
+  ip?: string;
+}
+
+/**
+ * Requête HTTP telle que journalisée : chemin sans chaîne de requête, qui peut contenir des
+ * données patient (recherche par nom, téléphone, date de naissance). Fastify utilise ce
+ * sérialiseur à la place du sien, qui journalise l'URL complète.
+ */
+export function serializeRequest(req: LoggedRequest) {
+  return {
+    method: req.method,
+    path: req.url?.split('?')[0],
+    host: req.host,
+    remoteAddress: req.ip,
+  };
+}
+
+export function createLogger(options: {
+  service: string;
+  env: AppEnv;
+  level: string;
+  destination?: DestinationStream;
+}): Logger {
+  return pino(
+    {
+      level: options.level,
+      base: { service: options.service, env: options.env },
+      timestamp: pino.stdTimeFunctions.isoTime,
+      redact: { paths: REDACTED_PATHS, censor: '[REDACTED]' },
+      serializers: { req: serializeRequest },
+    },
+    options.destination,
+  );
 }
 
 export type { Logger };

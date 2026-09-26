@@ -1,4 +1,18 @@
 import {
+  duplicateCandidatesResponseSchema,
+  importRowsReportResponseSchema,
+  importSummarySchema,
+  listImportsResponseSchema,
+  listMedicalNotesResponseSchema,
+  listPatientsResponseSchema,
+  patientDetailSchema,
+  revertImportResponseSchema,
+  type ContactInput,
+  type CreateImportRequest,
+  type CreatePatientRequest,
+  type ImportRowInput,
+  type UpdateContactRequest,
+  type UpdatePatientRequest,
   apiErrorSchema,
   clinicResponseSchema,
   csrfResponseSchema,
@@ -123,7 +137,72 @@ export const api = {
     request('POST', `/api/users/${id}/reset-password`, temporaryPasswordResponseSchema, {}),
   resetMfa: (id: string) => request('POST', `/api/users/${id}/reset-mfa`, clinicUserSchema, {}),
   clinic: () => request('GET', '/api/clinic', clinicResponseSchema),
+
+  listPatients: (query: {
+    q?: string;
+    status?: 'ACTIVE' | 'ARCHIVED';
+    limit?: number;
+    offset?: number;
+  }) => request('GET', `/api/patients?${toQuery(query)}`, listPatientsResponseSchema),
+  duplicatePatients: (query: {
+    lastName: string;
+    firstName: string;
+    birthDate?: string | undefined;
+  }) =>
+    request(
+      'GET',
+      `/api/patients/duplicates?${toQuery(query)}`,
+      duplicateCandidatesResponseSchema,
+    ).then((r) => r.candidates),
+  getPatient: (id: string) => request('GET', `/api/patients/${id}`, patientDetailSchema),
+  createPatient: (body: CreatePatientRequest) =>
+    request('POST', '/api/patients', patientDetailSchema, body),
+  updatePatient: (id: string, body: UpdatePatientRequest) =>
+    request('PATCH', `/api/patients/${id}`, patientDetailSchema, body),
+  archivePatient: (id: string, version: number) =>
+    request('POST', `/api/patients/${id}/archive`, patientDetailSchema, { version }),
+  restorePatient: (id: string, version: number) =>
+    request('POST', `/api/patients/${id}/restore`, patientDetailSchema, { version }),
+  addContact: (id: string, body: ContactInput) =>
+    request('POST', `/api/patients/${id}/contacts`, patientDetailSchema, body),
+  updateContact: (id: string, contactId: string, body: UpdateContactRequest) =>
+    request('PATCH', `/api/patients/${id}/contacts/${contactId}`, patientDetailSchema, body),
+  removeContact: (id: string, contactId: string) =>
+    request('DELETE', `/api/patients/${id}/contacts/${contactId}`, patientDetailSchema),
+  medicalNotes: (id: string) =>
+    request('GET', `/api/patients/${id}/medical-notes`, listMedicalNotesResponseSchema).then(
+      (r) => r.notes,
+    ),
+  addMedicalNote: (id: string, content: string) =>
+    request('POST', `/api/patients/${id}/medical-notes`, noContent, { content }),
+
+  listImports: () =>
+    request('GET', '/api/imports', listImportsResponseSchema).then((r) => r.imports),
+  createImport: (body: CreateImportRequest) =>
+    request('POST', '/api/imports', importSummarySchema, body),
+  sendImportRows: (id: string, rows: ImportRowInput[]) =>
+    request('POST', `/api/imports/${id}/rows`, importSummarySchema, { rows }),
+  importReport: (id: string, offset = 0) =>
+    request(
+      'GET',
+      `/api/imports/${id}/rows?onlyIssues=true&limit=200&offset=${offset}`,
+      importRowsReportResponseSchema,
+    ),
+  commitImport: (id: string) =>
+    request('POST', `/api/imports/${id}/commit`, importSummarySchema, {}),
+  revertImport: (id: string) =>
+    request('POST', `/api/imports/${id}/revert`, revertImportResponseSchema, {}),
+  discardImport: (id: string) =>
+    request('POST', `/api/imports/${id}/discard`, importSummarySchema, {}),
 };
+
+function toQuery(values: Record<string, string | number | undefined | null>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+  }
+  return params.toString();
+}
 
 /** Message à afficher pour une erreur, sans jamais exposer de détail technique. */
 export function errorMessage(error: unknown): string {

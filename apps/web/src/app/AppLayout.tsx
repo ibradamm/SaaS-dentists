@@ -25,6 +25,11 @@ export function AppLayout() {
             <NavLink to="/" end className={linkClass}>
               Accueil
             </NavLink>
+            {can(me, 'patient.read') && (
+              <NavLink to="/patients" className={linkClass}>
+                Patients
+              </NavLink>
+            )}
             {can(me, 'user.manage') && (
               <NavLink to="/utilisateurs" className={linkClass}>
                 Utilisateurs

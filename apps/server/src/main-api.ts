@@ -7,6 +7,8 @@ import { createSecretBox, parseEncryptionKey } from './lib/secret-box';
 import { onShutdown } from './lib/shutdown';
 import { createAuthService } from './modules/auth/auth.service';
 import { createClinicService } from './modules/clinic/clinic.service';
+import { createImportsService } from './modules/imports/imports.service';
+import { createPatientsService } from './modules/patients/patients.service';
 import { createUsersService } from './modules/users/users.service';
 
 const config = loadApiConfig();
@@ -32,6 +34,8 @@ try {
     auth: createAuthService({ db, secretBox, logger }),
     users: createUsersService({ db }),
     clinic: createClinicService({ db }),
+    patients: createPatientsService({ db, secretBox }),
+    imports: createImportsService({ db }),
     webOrigin: config.WEB_ORIGIN,
     secureCookies: config.SECURE_COOKIES,
   });

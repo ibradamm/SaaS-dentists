@@ -1,8 +1,8 @@
 # Plateforme de gestion de cabinet dentaire — Architecture v2
 
-> Statut : **en vigueur depuis le 2026-09-27** (recentrage du périmètre, ADR 0004).
+> Statut : **en vigueur depuis le 2026-09-26** (recentrage du périmètre, ADR 0004).
 > - L'architecture v1, qui incluait WhatsApp, l'agent IA et Google Calendar, est archivée dans `docs/future/`.
-> - Phases réalisées : 0 (analyse), 1 (fondations), 2 (authentification, rôles, utilisateurs). Phase en cours : 3 (patients et import).
+> - Phases réalisées : 0 (analyse), 1 (fondations), 2 (authentification, rôles, utilisateurs), 3 (patients et import, en attente de validation).
 > - Décisions détaillées : `docs/adr/`. Rapports de phase : `docs/phases/`.
 
 ---
@@ -87,8 +87,8 @@ Règles :
 | Authentification | `POST /api/auth/login`, `/logout`, `/password`, `/mfa/setup`, `/mfa/activate`, `/mfa/verify` ; `GET /api/auth/me`, `/csrf` | Fait |
 | Utilisateurs | `GET/POST /api/users`, `PATCH /api/users/:id`, `POST /api/users/:id/reset-password`, `/reset-mfa` | Fait |
 | Cabinet | `GET/PATCH /api/clinic` | Fait (minimal) ; complété en Phase 4 |
-| Patients | `GET/POST /api/patients`, `GET/PATCH /api/patients/:id`, archivage, contacts, notes médicales, doublons | Phase 3 |
-| Import | `GET/POST /api/imports`, lignes, rapport, validation, annulation, abandon | Phase 3 |
+| Patients | `GET/POST /api/patients`, `GET/PATCH /api/patients/:id`, archivage, contacts, notes médicales, doublons | Fait |
+| Import | `GET/POST /api/imports`, lignes, rapport, validation, annulation, abandon | Fait |
 | Praticiens et disponibilités | praticiens, types de rendez-vous, horaires hebdomadaires, blocages | Phase 4 |
 | Rendez-vous | `GET /api/appointments?from&to&practitionerId`, création, modification ou déplacement (version), annulation, statut | Phase 5 |
 | Finances | actes à encaisser, paiements, annulation de paiement, synthèses par période | Phase 7 |
@@ -121,7 +121,7 @@ Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, 
 | Authentification | Sessions serveur, Argon2id (`@node-rs/argon2`), TOTP (otplib) | ADR 0003 |
 | Téléphones | libphonenumber-js (métadonnées complètes) | Normalisation E.164 fiable |
 | Interface | React 19, Vite 8, react-router 8, TanStack Query 5, Tailwind 4 | Application de gestion sans besoin de rendu serveur |
-| Import de fichiers | papaparse (CSV), read-excel-file (xlsx), lecture dans le navigateur | ADR 0005 (Phase 3) |
+| Import de fichiers | papaparse (CSV), read-excel-file (xlsx), lecture dans le navigateur | ADR 0005 |
 | Agenda (Phase 5) | FullCalendar, paquets MIT uniquement ; alignement v6/v7 à trancher | Vues jour et semaine, glisser-déposer |
 | Dates et fuseaux (Phases 4-5) | Luxon | Fuseaux IANA, changements d'heure |
 | Graphiques (Phase 8) | Recharts | Intégration React |
@@ -167,10 +167,10 @@ docs/            ARCHITECTURE.md, adr/, phases/, future/
 | `clinics` | Cabinet : nom, fuseau, langue, devise, pays, paramètres | Fait |
 | `audit_logs` | Journal en ajout seul | Fait |
 | `users`, `clinic_memberships`, `sessions` | Comptes, rôle par cabinet, sessions | Fait |
-| `patients` | Identité, coordonnées administratives, note administrative, statut (actif ou archivé), source (saisie ou import), numéro de dossier d'origine, version | Phase 3 |
-| `patient_contacts` | Téléphones au format E.164, lien (patient lui-même, responsable légal, autre), contact principal | Phase 3 |
-| `patient_medical_notes` | Notes médicales chiffrées, en ajout seul, lecture tracée | Phase 3 |
-| `import_batches`, `import_rows` | Lots d'import et lignes validées ; données effacées après validation ou abandon | Phase 3 |
+| `patients` | Identité, coordonnées administratives, note administrative, statut (actif ou archivé), source (saisie ou import), numéro de dossier d'origine, version | Fait |
+| `patient_contacts` | Téléphones au format E.164, lien (patient lui-même, responsable légal, autre), contact principal | Fait |
+| `patient_medical_notes` | Notes médicales chiffrées, en ajout seul, lecture tracée | Fait |
+| `import_batches`, `import_rows` | Lots d'import et lignes validées ; données effacées après validation ou abandon | Fait |
 | `practitioners` | Praticien réservable (lié ou non à un compte), couleur, actif | Phase 4 |
 | `appointment_types` | Type de rendez-vous : libellé, durée, couleur | Phase 4 |
 | `working_hours` | Horaires hebdomadaires par praticien, avec période de validité | Phase 4 |
@@ -229,7 +229,7 @@ Double authentification obligatoire pour ADMIN et DENTIST.
 | Validation | Zod sur chaque entrée ; requêtes paramétrées uniquement |
 | Données sensibles | Notes médicales et secrets TOTP chiffrés (AES-256-GCM), clé hors base ; lecture des notes médicales auditée |
 | Secrets | Variables d'environnement et gestionnaire de secrets ; gitleaks en CI ; `.env` exclu de Git |
-| Logs et audit | Aucune donnée patient dans les logs ; l'audit ne recopie pas les valeurs modifiées (noms de champs seulement) |
+| Logs et audit | Aucune donnée patient dans les logs (chemin des requêtes sans chaîne de requête, corps masqués) ; l'audit ne recopie pas les valeurs modifiées (noms de champs seulement) |
 | Sauvegardes | PostgreSQL managé avec restauration à un instant donné ; test de restauration documenté (Phase 11) |
 
 ### G.2 Durées de conservation (proposition technique, à valider juridiquement)
@@ -247,14 +247,14 @@ Double authentification obligatoire pour ADMIN et DENTIST.
 
 ## H. Plan des phases (v2)
 
-L'ordre suit les priorités fixées le 2026-09-27. Les disponibilités passent avant les rendez-vous, car un rendez-vous ne se valide que par rapport aux horaires et aux blocages d'un praticien. Chaque phase livre son interface, ses tests et sa documentation.
+L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent avant les rendez-vous, car un rendez-vous ne se valide que par rapport aux horaires et aux blocages d'un praticien. Chaque phase livre son interface, ses tests et sa documentation.
 
 | Phase | Contenu | Priorités couvertes | État |
 |---|---|---|---|
 | 0 | Analyse et architecture | — | Fait |
 | 1 | Fondations : monorepo, PostgreSQL, migrations, isolation, file de tâches, CI | 1, 2 | Fait |
 | 2 | Authentification, rôles, permissions, utilisateurs, paramètres minimaux du cabinet | 3, 4, 6 | Fait |
-| 3 | Patients : dossier administratif, contacts, notes médicales restreintes, recherche, doublons, **import CSV / Excel** | 7 | En cours |
+| 3 | Patients : dossier administratif, contacts, notes médicales restreintes, recherche, doublons, **import CSV / Excel** | 7 | Fait (en attente de validation) |
 | 4 | Cabinet et disponibilités : profil du cabinet, horaires d'ouverture, praticiens, types de rendez-vous, horaires hebdomadaires, absences et blocages | 5, 10, 11 | À faire |
 | 5 | Rendez-vous et agenda : création, déplacement, annulation, statuts, anti double réservation, vues jour et semaine, historique patient | 8, 9 | À faire |
 | 6 | Applications web dentiste et secrétaire : parcours quotidiens par rôle, ergonomie, accessibilité, téléphone et tablette | 12, 13 | À faire |

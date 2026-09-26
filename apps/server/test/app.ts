@@ -3,11 +3,14 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import type pg from 'pg';
 import { pino } from 'pino';
 import { buildApp, type RateLimits } from '../src/api/app';
+import type { Logger } from '../src/config/logger';
 import { cookieName } from '../src/api/session-cookie';
 import { createDb, type Database } from '../src/db/client';
 import { createSecretBox, type SecretBox } from '../src/lib/secret-box';
 import { createAuthService } from '../src/modules/auth/auth.service';
 import { createClinicService } from '../src/modules/clinic/clinic.service';
+import { createImportsService } from '../src/modules/imports/imports.service';
+import { createPatientsService } from '../src/modules/patients/patients.service';
 import { createUsersService } from '../src/modules/users/users.service';
 
 export const TEST_WEB_ORIGIN = 'http://127.0.0.1:5173';
@@ -20,22 +23,27 @@ const RELAXED: RateLimits = {
 
 export async function buildTestApp(
   pool: pg.Pool,
-  options: { rateLimits?: RateLimits; now?: () => Date; db?: Database; secretBox?: SecretBox } = {},
+  options: {
+    rateLimits?: RateLimits;
+    now?: () => Date;
+    db?: Database;
+    secretBox?: SecretBox;
+    logger?: Logger;
+  } = {},
 ): Promise<FastifyInstance> {
-  const logger = pino({ level: 'silent' });
+  const logger = options.logger ?? pino({ level: 'silent' });
   const db = options.db ?? createDb(pool);
+  const secretBox = options.secretBox ?? createSecretBox(randomBytes(32));
+  const now = options.now ? { now: options.now } : {};
   const app = await buildApp({
     logger,
     pool,
     trustProxyHops: 0,
-    auth: createAuthService({
-      db,
-      secretBox: options.secretBox ?? createSecretBox(randomBytes(32)),
-      logger,
-      ...(options.now ? { now: options.now } : {}),
-    }),
+    auth: createAuthService({ db, secretBox, logger, ...now }),
     users: createUsersService({ db }),
     clinic: createClinicService({ db }),
+    patients: createPatientsService({ db, secretBox, ...now }),
+    imports: createImportsService({ db, ...now }),
     webOrigin: TEST_WEB_ORIGIN,
     secureCookies: false,
     rateLimits: options.rateLimits ?? RELAXED,
@@ -61,7 +69,7 @@ export function browser(app: FastifyInstance) {
   }
 
   async function call(
-    method: 'GET' | 'POST' | 'PATCH',
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
     url: string,
     payload?: unknown,
     headers: Record<string, string> = {},
@@ -86,6 +94,8 @@ export function browser(app: FastifyInstance) {
       call('POST', url, payload ?? {}, headers),
     patch: (url: string, payload: unknown, headers?: Record<string, string>) =>
       call('PATCH', url, payload, headers),
+    delete: (url: string, headers?: Record<string, string>) =>
+      call('DELETE', url, undefined, headers),
     login: (email: string, password: string) =>
       call('POST', '/api/auth/login', { email, password }),
     get sessionToken() {

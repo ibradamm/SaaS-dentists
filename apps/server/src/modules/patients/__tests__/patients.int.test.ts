@@ -92,6 +92,22 @@ describe('dossier patient', () => {
     expect(await ids('06 98 76')).toContain(p.id);
     expect(await ids('24/12/1975')).toContain(p.id);
     expect(await ids('inexistant-xyz')).toEqual([]);
+
+    // Résumé : téléphone principal (une seule ligne par patient), null sans téléphone.
+    const bare = await newPatient({ lastName: 'Zéphyrin', firstName: 'Basile', contacts: [] });
+    await service.addContact(secretary, p.id, { phone: '01 45 67 89 10' }, META);
+    const listed = (await service.list(secretary, { q: 'zephyrin' })).patients;
+    expect(listed).toEqual([
+      {
+        id: p.id,
+        lastName: 'Zéphyrin',
+        firstName: 'Anaïs',
+        birthDate: '1975-12-24',
+        primaryPhone: '+33698765432',
+        status: 'ACTIVE',
+      },
+      expect.objectContaining({ id: bare.id, primaryPhone: null }),
+    ]);
   });
 
   it('verrou optimiste : une modification sur une version périmée est refusée', async () => {
@@ -171,7 +187,9 @@ describe('dossier patient', () => {
       firstName: 'paul',
       birthDate: '1990-01-01',
     });
-    expect(found.map((x) => x.id)).toContain(p.id);
+    expect(found.filter((x) => x.id === p.id)).toEqual([
+      expect.objectContaining({ primaryPhone: '+33612345678' }),
+    ]);
     const other = await service.duplicates(secretary, {
       lastName: 'Doublon',
       firstName: 'Paul',
