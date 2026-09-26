@@ -65,6 +65,15 @@ La première non-détection s'explique ainsi :
 - deux couches indépendantes existaient donc, mais seule leur combinaison était testée ;
 - un test unitaire couvre maintenant la première couche seule.
 
+## Incident pendant la livraison
+
+J'ai poussé le commit `66112e7` alors que gitleaks venait de signaler une détection : ma commande enchaînait le commit sur un `| tail -1` qui masquait le code de sortie. Il s'agissait d'un faux positif (mot de passe temporaire fictif dans une fixture de test de l'interface), donc aucun secret n'a fuité.
+
+Corrections :
+- fixture remplacée par une valeur à faible entropie ;
+- entrée justifiée dans `.gitleaksignore` pour ce commit, sans réécrire l'historique ;
+- commits suivants conditionnés au code de sortie réel de gitleaks.
+
 ## Écarts par rapport au plan validé
 
 1. **Pas de tables `roles` / `permissions` / `role_permissions`** : catalogue et matrice dans le code, rôle porté par l'appartenance au cabinet (ADR 0003).

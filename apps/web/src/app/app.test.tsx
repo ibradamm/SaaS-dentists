@@ -174,7 +174,7 @@ describe('gestion des utilisateurs', () => {
           fullName: 'Nora Petit',
           role: 'SECRETARY',
         });
-        return { status: 201, body: { user: created, temporaryPassword: 'Abcd2345Efgh6789' } };
+        return { status: 201, body: { user: created, temporaryPassword: 'TEMPORAIRE-DE-TEST' } };
       },
     });
     renderApp('/utilisateurs');
@@ -182,7 +182,7 @@ describe('gestion des utilisateurs', () => {
     fill('Nom complet', 'Nora Petit');
     fill('Adresse e-mail', 'nouvelle@cabinet.test');
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
-    expect(await screen.findByText('Abcd2345Efgh6789')).toBeInTheDocument();
+    expect(await screen.findByText('TEMPORAIRE-DE-TEST')).toBeInTheDocument();
     const listing = screen.getByRole('list', { name: 'Liste des utilisateurs' });
     await waitFor(() =>
       expect(within(listing).getByText('nouvelle@cabinet.test')).toBeInTheDocument(),
@@ -191,6 +191,6 @@ describe('gestion des utilisateurs', () => {
       calls.find((c) => c.method === 'POST' && c.url === '/api/users')?.headers['x-csrf-token'],
     ).toBe('csrf-me');
     fireEvent.click(screen.getByRole('button', { name: /J'ai transmis/ }));
-    expect(screen.queryByText('Abcd2345Efgh6789')).not.toBeInTheDocument();
+    expect(screen.queryByText('TEMPORAIRE-DE-TEST')).not.toBeInTheDocument();
   });
 });
