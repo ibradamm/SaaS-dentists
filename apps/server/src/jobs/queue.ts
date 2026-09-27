@@ -19,7 +19,11 @@ export interface QueueDefinition {
 }
 
 /** Catalogue des files, créées au déploiement. Chaque phase ajoute les siennes. */
-export const QUEUES: QueueDefinition[] = [];
+export const QUEUES: QueueDefinition[] = [
+  // Conservation des données (jobs/retention.ts) : une exécution à la fois, sans relance
+  // immédiate en cas d'échec (la suivante a lieu la nuit d'après).
+  { name: 'maintenance-retention', options: { policy: 'singleton', retryLimit: 1 } },
+];
 
 export function createRuntimeJobQueue(connectionString: string, logger: Logger): PgBoss {
   const boss = new PgBoss({

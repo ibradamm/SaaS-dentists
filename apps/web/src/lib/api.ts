@@ -1,5 +1,7 @@
 import {
   billingExemptionResponseSchema,
+  auditActorsResponseSchema,
+  auditLogResponseSchema,
   dashboardResponseSchema,
   chargeSchema,
   patientAccountSchema,
@@ -289,6 +291,16 @@ export const api = {
     request('GET', `/api/finance/revenue?${toQuery(query)}`, revenueResponseSchema),
   dashboard: (query: { from: string; to: string; practitionerId?: string | null }) =>
     request('GET', `/api/dashboard?${toQuery(query)}`, dashboardResponseSchema),
+  auditLogs: (query: {
+    from: string;
+    to: string;
+    actorId?: string | undefined;
+    action?: string | undefined;
+    entityType?: string | undefined;
+    entityId?: string | undefined;
+    before?: string | undefined;
+  }) => request('GET', `/api/audit-logs?${toQuery(query)}`, auditLogResponseSchema),
+  auditActors: () => request('GET', '/api/audit-logs/actors', auditActorsResponseSchema),
   paymentsJournal: (query: { from: string; to: string }) =>
     request('GET', `/api/finance/payments?${toQuery(query)}`, paymentsJournalResponseSchema).then(
       (r) => r.payments,

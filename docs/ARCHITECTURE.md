@@ -93,14 +93,16 @@ Règles :
 | Rendez-vous | `GET /api/appointments?from&to&practitionerId&includeCancelled`, `GET /api/appointments/:id`, `POST /api/appointments` (confirmation explicite `allowOutsideAvailability`), `PATCH /:id` (déplacement, version), `POST /:id/status` (honoré, patient absent, annulé, correction) ; `GET /api/patients/:id/appointments` ; `GET /api/availability/slots` ; conflits renvoyés par les écritures d'horaires et d'indisponibilités | Fait (ADR 0007) |
 | Finances | `GET /api/patients/:id/account` ; `POST /api/charges` (clé d'idempotence, paiement immédiat facultatif), `POST /api/charges/:id/cancel` ; `POST /api/payments` (clé d'idempotence), `POST /api/payments/:id/void` ; `GET /api/receivables` ; `GET /api/finance/revenue?from&to`, `GET /api/finance/payments?from&to` | Fait (ADR 0009) |
 | Tableau de bord et statistiques | `GET /api/dashboard?from&to&practitionerId` : activité, occupation, patients, restant à encaisser, honorés sans acte, revenus ; sections selon les permissions | Fait (ADR 0010) |
-| Audit | `GET /api/audit-logs` (filtres, pagination) | Phase 9 |
+| Journal d'audit | `GET /api/audit-logs?from&to&actorId&action&entityType&entityId&before` (permission `audit.read`, jours locaux du cabinet, curseur exact), `GET /api/audit-logs/actors` | Fait (ADR 0011) |
 
 Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, partagés par le serveur et l'interface.
 
 ### A.5 Observabilité
 - **Logs JSON** (pino), avec un `request_id` généré par le serveur ; champs sensibles masqués à la source.
-- **Journal d'audit** consultable par l'administrateur (Phase 9).
-- **Métriques** (`/metrics`, réseau interne) et **suivi des erreurs** sans données personnelles : Phase 11.
+- **Erreurs journalisées par liste blanche** : type, code, SQL sans valeurs, pile ; jamais les paramètres SQL ni le `detail` PostgreSQL (ADR 0011).
+- **Journal d'audit** consultable par l'administrateur (page « Journal », ADR 0011).
+- **Remontée des erreurs vers Sentry**, facultative (`SENTRY_DSN`), sans SDK, événement par liste blanche, environnement = `APP_ENV` (ADR 0011). À vérifier contre le vrai service en recette.
+- **Métriques** (`/metrics`, réseau interne) : Phase 11.
 
 ### A.6 Environnements
 - `APP_ENV` ∈ `development`, `test`, `staging`, `production` ; configuration validée au démarrage.
@@ -226,26 +228,26 @@ Double authentification obligatoire pour ADMIN et DENTIST.
 | Domaine | Mesure |
 |---|---|
 | Transport | TLS (Caddy), HSTS, cookies `Secure` et `__Host-` hors développement |
-| Authentification | Argon2id, verrouillage, sessions révocables, TOTP, renouvellement du jeton à chaque élévation (ADR 0003) |
-| Requêtes | Jeton CSRF et vérification de l'origine ; limitation du nombre de requêtes ; taille des corps limitée ; en-têtes de sécurité (helmet) |
+| Authentification | Argon2id, verrouillage, sessions révocables, TOTP, renouvellement du jeton à chaque élévation (ADR 0003) ; tentatives sérialisées par adresse, codes TOTP faux comptés pour le compte (ADR 0011) |
+| Requêtes | Politique d'accès obligatoire sur chaque route, vérifiée avant la lecture du corps ; jeton CSRF et vérification de l'origine ; limitation du nombre de requêtes ; taille des corps limitée ; en-têtes de sécurité (helmet) ; matrice de toutes les routes testée (ADR 0011) |
 | Autorisation | Permissions dans les services et les routes, RLS, clés composites, droits par colonne |
 | Validation | Zod sur chaque entrée ; requêtes paramétrées uniquement |
 | Données sensibles | Notes médicales et secrets TOTP chiffrés (AES-256-GCM), clé hors base ; lecture des notes médicales auditée |
 | Secrets | Variables d'environnement et gestionnaire de secrets ; gitleaks en CI ; `.env` exclu de Git |
 | Interface | Pages chargées à la demande ; cache des requêtes vidé à tout changement de session (compte, cabinet, expiration) et retour à la connexion sur une réponse 401 (ADR 0008) |
-| Logs et audit | Aucune donnée patient dans les logs (chemin des requêtes sans chaîne de requête, corps masqués) ; l'audit ne recopie pas les valeurs modifiées (noms de champs seulement) |
+| Logs et audit | Aucune donnée patient dans les logs (chemin des requêtes sans chaîne de requête, corps masqués, erreurs par liste blanche) ; l'audit ne recopie pas les valeurs modifiées (noms de champs seulement) ; catalogue fermé des actions |
 | Sauvegardes | PostgreSQL managé avec restauration à un instant donné ; test de restauration documenté (Phase 11) |
 
 ### G.2 Durées de conservation (proposition technique, à valider juridiquement)
 
 | Donnée | Proposition |
 |---|---|
-| Lignes d'import (données personnelles) | Effacées à la validation ou à l'abandon du lot ; brouillons abandonnés effacés après 24 h |
-| Sessions expirées | Purge à ajouter (Phase 9) |
+| Lignes d'import (données personnelles) | Effacées à la validation ou à l'abandon du lot ; brouillons abandonnés effacés après 24 h (tâche nocturne, ADR 0011) |
+| Sessions terminées | Supprimées 30 jours après leur fin (tâche nocturne ; règle inscrite dans la politique RLS, ADR 0011) |
 | Journaux applicatifs | 30 jours |
 | `audit_logs` | À fixer avec un juriste (souvent plusieurs années) |
 | Paiements | Durée légale comptable du pays |
-| Patients inactifs | Archivage puis effacement selon la règle retenue (procédure d'effacement à documenter, Phase 9) |
+| Patients inactifs | Archivage ; effacement selon la règle retenue après avis juridique (conflit avec la conservation du dossier médical, ADR 0011) |
 
 ---
 
@@ -263,8 +265,8 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | 5 | Rendez-vous et agenda : création, déplacement, annulation, statuts, anti double réservation, vues jour et semaine, historique patient (ADR 0007) | 8, 9 | Fait |
 | 6 | Applications web dentiste et secrétaire : parcours quotidiens par rôle, ergonomie, accessibilité, téléphone et tablette (ADR 0008) | 12, 13 | Fait |
 | 7 | Paiements et revenus encaissés : actes à encaisser, paiements partiels, restant dû, annulations motivées, « À encaisser », revenus par période (ADR 0009) | 14 | Fait |
-| 8 | Tableau de bord et statistiques : indicateurs du jour sur l'accueil, page « Statistiques » par période et praticien, calculs en base dans le fuseau du cabinet (ADR 0010) | 15, 16 | Fait (en attente de validation) |
-| 9 | Journal d'audit consultable et audit de sécurité : revue OWASP ASVS, purges, rétention, procédure d'effacement | 17, 18 | À faire |
+| 8 | Tableau de bord et statistiques : indicateurs du jour sur l'accueil, page « Statistiques » par période et praticien, calculs en base dans le fuseau du cabinet (ADR 0010) | 15, 16 | Fait |
+| 9 | Journal d'audit consultable et revue de sécurité : page « Journal », matrice de toutes les routes, fuite entre cabinets, tentatives simultanées, journaux sans donnée patient, remontée des erreurs, conservation (ADR 0011) | 17, 18 | Fait (en attente de validation) |
 | 10 | Tests complets : E2E Playwright en CI, charge, restauration | 19 | À faire |
 | 11 | Déploiement : hébergement, secrets, sauvegardes, supervision, procédures | 20 | À faire |
 
@@ -274,6 +276,7 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 
 **Aucun service payant n'est requis par le périmètre actuel.** Les seules dépendances sont :
 - les paquets npm, sous licence MIT ou Apache-2.0, vérifiés à l'installation et audités en CI ;
+- Sentry, **facultatif** (remontée des erreurs, sans SDK ni donnée saisie, ADR 0011) : désactivé sans `SENTRY_DSN`, offre gratuite suffisante au MVP ;
 - l'hébergeur (Phase 11). Si le cabinet est en France, un hébergement certifié HDS est obligatoire pour des données de santé.
 
 ---
@@ -291,6 +294,8 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | Non-conformité données de santé | Minimisation, hébergement adapté, avis juridique avant la production |
 | Dérive du périmètre | Périmètre explicite (section 0, ADR 0004) |
 | Limitation de débit en mémoire | Suffisante pour une seule instance ; stockage partagé si plusieurs instances (Phase 11) |
+| Essais de mots de passe ou de codes en parallèle | Une tentative à la fois par adresse, 10 échecs (mots de passe et codes) puis 15 minutes de verrouillage ; tests de concurrence (ADR 0011) |
+| Donnée patient dans un journal ou chez Sentry | Sérialisation des erreurs et événements Sentry par liste blanche ; tests sur erreurs réelles et parcours complet (ADR 0011) |
 
 ---
 

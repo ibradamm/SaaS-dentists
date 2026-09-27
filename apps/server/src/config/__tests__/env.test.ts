@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ConfigError, loadApiConfig, loadBootstrapConfig } from '../env';
+import { ConfigError, loadApiConfig, loadBootstrapConfig, loadWorkerConfig } from '../env';
 
 const validApiEnv = {
   APP_ENV: 'development',
@@ -80,5 +80,31 @@ describe('configuration', () => {
         DATABASE_APP_PASSWORD: 'suffisamment-long',
       }),
     ).toThrow(/DATABASE_OWNER_PASSWORD/);
+  });
+
+  it('remontée des erreurs : facultative, HTTPS hors développement, jamais la clé dans l’erreur', () => {
+    expect(loadApiConfig(validApiEnv).SENTRY_DSN).toBeUndefined();
+    const dsn = 'https://clepublique@o1.ingest.de.sentry.io/42';
+    const prod = {
+      ...validApiEnv,
+      APP_ENV: 'production',
+      WEB_ORIGIN: 'https://cabinet.example.org',
+      SENTRY_DSN: dsn,
+      SENTRY_RELEASE: 'v1.2.3+abc',
+    };
+    expect(loadApiConfig(prod)).toMatchObject({ SENTRY_DSN: dsn, SENTRY_RELEASE: 'v1.2.3+abc' });
+    for (const load of [loadApiConfig, loadWorkerConfig]) {
+      try {
+        load({ ...prod, SENTRY_DSN: 'http://clepubliqueSECRETE@sentry.example.org/42' });
+        expect.unreachable();
+      } catch (error) {
+        expect((error as Error).message).toMatch(/SENTRY_DSN : HTTPS obligatoire/);
+        expect((error as Error).message).not.toContain('SECRETE');
+      }
+    }
+    // En développement, un serveur d'ingestion local en HTTP est accepté.
+    expect(
+      loadWorkerConfig({ ...validApiEnv, SENTRY_DSN: 'http://cle@127.0.0.1:9000/42' }).SENTRY_DSN,
+    ).toBe('http://cle@127.0.0.1:9000/42');
   });
 });

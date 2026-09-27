@@ -6,7 +6,7 @@ import { actorOf, requestMeta } from '../auth-plugin';
 export function clinicRoutes(app: FastifyInstance, deps: { clinic: ClinicService }) {
   const { clinic } = deps;
 
-  app.get('/api/clinic', async (request) =>
+  app.get('/api/clinic', { config: { access: { authenticated: true } } }, async (request) =>
     clinicResponseSchema.parse(await clinic.get(actorOf(request))),
   );
 

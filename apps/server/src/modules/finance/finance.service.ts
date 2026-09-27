@@ -1,3 +1,4 @@
+import type { AuditAction } from '@dental/shared';
 import {
   MAX_JOURNAL_PAYMENTS,
   MAX_REVENUE_DAYS,
@@ -100,7 +101,7 @@ export function createFinanceService(deps: { db: Database; now?: () => Date }) {
   function audit(
     tx: Transaction,
     actor: UserActor,
-    action: string,
+    action: AuditAction,
     entityType: 'charge' | 'payment',
     id: string,
     meta: RequestMeta,

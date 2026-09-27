@@ -6,6 +6,7 @@ import { buildApp, type RateLimits } from '../src/api/app';
 import type { Logger } from '../src/config/logger';
 import { cookieName } from '../src/api/session-cookie';
 import { createDb, type Database } from '../src/db/client';
+import type { ErrorReporter } from '../src/lib/error-reporter';
 import { createSecretBox, type SecretBox } from '../src/lib/secret-box';
 import { createAuthService } from '../src/modules/auth/auth.service';
 import { createClinicService } from '../src/modules/clinic/clinic.service';
@@ -16,6 +17,7 @@ import { createSchedulesService } from '../src/modules/scheduling/schedules.serv
 import { createAppointmentsService } from '../src/modules/appointments/appointments.service';
 import { createFinanceService } from '../src/modules/finance/finance.service';
 import { createStatsService } from '../src/modules/stats/stats.service';
+import { createAuditLogService } from '../src/modules/audit/audit-log.service';
 import { createUsersService } from '../src/modules/users/users.service';
 
 export const TEST_WEB_ORIGIN = 'http://127.0.0.1:5173';
@@ -34,6 +36,7 @@ export async function buildTestApp(
     db?: Database;
     secretBox?: SecretBox;
     logger?: Logger;
+    errorReporter?: ErrorReporter;
   } = {},
 ): Promise<FastifyInstance> {
   const logger = options.logger ?? pino({ level: 'silent' });
@@ -54,9 +57,11 @@ export async function buildTestApp(
     appointments: createAppointmentsService({ db, ...now }),
     finance: createFinanceService({ db, ...now }),
     stats: createStatsService({ db, ...now }),
+    auditLog: createAuditLogService({ db }),
     webOrigin: TEST_WEB_ORIGIN,
     secureCookies: false,
     rateLimits: options.rateLimits ?? RELAXED,
+    ...(options.errorReporter ? { errorReporter: options.errorReporter } : {}),
   });
   await app.ready();
   return app;

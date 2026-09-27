@@ -31,7 +31,7 @@ describe('outbox transactionnelle (pg-boss, rôle applicatif)', () => {
 
   it('une tâche enfilée dans une transaction validée existe, avec l’écriture métier', async () => {
     const jobId = await withTenant(t.appDb, clinic.id, async (tx) => {
-      await recordAudit(tx, { actorType: 'SYSTEM', actorId: null, action: 'test.outbox_commit' });
+      await recordAudit(tx, { actorType: 'SYSTEM', actorId: null, action: 'import.created' });
       return enqueue(boss, tx, QUEUE, { clinicId: clinic.id, kind: 'commit' });
     });
     const job = await boss.getJobById<{ kind: string }>(QUEUE, jobId);
@@ -45,7 +45,7 @@ describe('outbox transactionnelle (pg-boss, rôle applicatif)', () => {
         await recordAudit(tx, {
           actorType: 'SYSTEM',
           actorId: null,
-          action: 'test.outbox_rollback',
+          action: 'import.discarded',
         });
         jobId = await enqueue(boss, tx, QUEUE, { clinicId: clinic.id, kind: 'rollback' });
         throw new Error('échec métier après enfilage');
@@ -57,7 +57,7 @@ describe('outbox transactionnelle (pg-boss, rôle applicatif)', () => {
       tx
         .select()
         .from(auditLogs)
-        .where(sql`${auditLogs.action} = 'test.outbox_rollback'`),
+        .where(sql`${auditLogs.action} = 'import.discarded'`),
     );
     expect(audits).toEqual([]);
   });

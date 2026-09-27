@@ -29,7 +29,15 @@ export const auditLogs = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index('audit_logs_clinic_created_idx').on(t.clinicId, t.createdAt.desc()),
+    // Ordre de lecture du journal (docs/adr/0011) : récent d'abord, départagé par id, pour une
+    // lecture indexée qui s'arrête à la page demandée, curseur compris. NULLS FIRST : c'est le
+    // sens d'un « ORDER BY … DESC » SQL ; avec NULLS LAST (défaut de drizzle), l'index ne
+    // correspondrait pas à l'ordre demandé et PostgreSQL lirait toute la période avant de trier.
+    index('audit_logs_clinic_created_id_idx').on(
+      t.clinicId,
+      t.createdAt.desc().nullsFirst(),
+      t.id.desc().nullsFirst(),
+    ),
     index('audit_logs_clinic_entity_idx').on(t.clinicId, t.entityType, t.entityId),
     check('audit_logs_actor_type_values', sql`${t.actorType} in ('USER', 'AGENT', 'SYSTEM')`),
     check('audit_logs_action_format', sql`${t.action} ~ '^[a-z][a-z_]*(\\.[a-z][a-z_]*)+$'`),

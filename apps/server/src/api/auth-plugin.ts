@@ -9,18 +9,44 @@ import { safeEqual } from '../modules/auth/tokens';
 import { readSessionCookie, type CookiePolicy } from './session-cookie';
 
 /**
- * Configuration d'accès d'une route :
+ * Configuration d'accès d'une route, obligatoire sur toute route (docs/adr/0011) :
  * - public : aucune session requise (connexion, santé) ;
+ * - authenticated : session complète, sans permission particulière ;
  * - allow : étapes d'authentification tolérées (par défaut aucune : accès complet requis) ;
  * - permission : permission exigée (vérifiée aussi par le service appelé).
  * - anyPermission : au moins une des permissions (portée exacte vérifiée par le service).
  */
 export interface RouteAccess {
   public?: boolean;
+  authenticated?: boolean;
   allow?: readonly SessionRestriction[];
   permission?: Permission;
   /** Au moins une de ces permissions ; le service vérifie ensuite la portée exacte. */
   anyPermission?: readonly Permission[];
+}
+
+export interface RouteInventoryEntry {
+  method: string;
+  url: string;
+  access: RouteAccess;
+}
+
+const inventories = new WeakMap<FastifyInstance, RouteInventoryEntry[]>();
+
+/** Routes enregistrées et leur politique d'accès (tests de sécurité systématiques). */
+export function routeInventory(app: FastifyInstance): readonly RouteInventoryEntry[] {
+  return inventories.get(app) ?? [];
+}
+
+function declaresAccess(access: RouteAccess | undefined): access is RouteAccess {
+  return Boolean(
+    access &&
+    (access.public ||
+      access.authenticated ||
+      access.allow ||
+      access.permission ||
+      access.anyPermission),
+  );
 }
 
 declare module 'fastify' {
@@ -57,9 +83,24 @@ export function registerAuth(
   deps: { auth: AuthService; cookies: CookiePolicy; webOrigin: string },
 ) {
   app.decorateRequest('auth', null);
+  const inventory: RouteInventoryEntry[] = [];
+  inventories.set(app, inventory);
 
-  app.addHook('preHandler', async (request: FastifyRequest, _reply: FastifyReply) => {
-    if (!request.url.startsWith('/api/')) return;
+  // Refus au démarrage d'une route sans politique d'accès : un oubli ne peut pas ouvrir une
+  // route à tout compte connecté.
+  app.addHook('onRoute', (route) => {
+    const access = route.config?.access;
+    const methods = Array.isArray(route.method) ? route.method : [route.method];
+    if (!declaresAccess(access)) {
+      throw new Error(`Route ${methods.join(',')} ${route.url} sans politique d'accès`);
+    }
+    for (const method of methods) inventory.push({ method, url: route.url, access });
+  });
+
+  // Avant la lecture du corps (après la limitation du nombre de requêtes) : une requête non
+  // authentifiée ou d'une autre origine est refusée sans que son corps soit analysé.
+  app.addHook('preParsing', async (request: FastifyRequest, _reply: FastifyReply, payload) => {
+    if (request.is404) return payload;
     const access = request.routeOptions.config.access ?? {};
     const unsafe = !SAFE_METHODS.has(request.method);
 
@@ -68,7 +109,7 @@ export function registerAuth(
     if (unsafe && origin !== undefined && origin !== deps.webOrigin) {
       throw new AppError('CSRF_INVALID', 'Origine de la requête refusée', 403);
     }
-    if (access.public) return;
+    if (access.public) return payload;
 
     const token = readSessionCookie(request, deps.cookies);
     const session = token ? await deps.auth.resolveSession(token) : null;
@@ -90,5 +131,6 @@ export function registerAuth(
     }
     if (access.permission) authorize(session.actor, access.permission);
     if (access.anyPermission) authorizeAny(session.actor, access.anyPermission);
+    return payload;
   });
 }

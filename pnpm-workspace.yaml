@@ -6,3 +6,8 @@ packages:
 # Seuls les paquets listés ici peuvent en exécuter un.
 onlyBuiltDependencies:
   - esbuild
+
+# esbuild ≤ 0.24 (GHSA-67mh-4wv8-2f99, serveur de développement d'esbuild) : version corrigée
+# imposée à la dépendance de développement de drizzle-kit (chargement de sa configuration).
+overrides:
+  '@esbuild-kit/core-utils>esbuild': ^0.25.0

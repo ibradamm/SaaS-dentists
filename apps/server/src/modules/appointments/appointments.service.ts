@@ -1,3 +1,4 @@
+import type { AuditAction } from '@dental/shared';
 import {
   APPOINTMENT_STATUSES,
   MAX_APPOINTMENT_LIST_DAYS,
@@ -80,7 +81,7 @@ export function createAppointmentsService(deps: { db: Database; now?: () => Date
   function audit(
     tx: Transaction,
     actor: UserActor,
-    action: string,
+    action: AuditAction,
     id: string,
     meta: RequestMeta,
     changes: Record<string, { from?: AuditValue; to?: AuditValue }> | null,

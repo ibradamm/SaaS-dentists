@@ -120,6 +120,20 @@
       "when": 1790534881293,
       "tag": "0016_billing_exempt_security",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790537236600,
+      "tag": "0017_audit_log_reading_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790537422004,
+      "tag": "0018_retention_security",
+      "breakpoints": true
     }
   ]
 }

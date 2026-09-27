@@ -82,11 +82,24 @@ describe('isolation des tables d’authentification (RLS)', () => {
     ['e-mail', sql`UPDATE users SET email = 'pirate@x.test'`],
     ['statut plateforme', sql`UPDATE users SET status = 'DISABLED'`],
     ['suppression de compte', sql`DELETE FROM users`],
-    ['suppression de session', sql`DELETE FROM sessions`],
     ['suppression d’appartenance', sql`DELETE FROM clinic_memberships`],
   ])('le rôle applicatif ne peut pas modifier : %s', async (_label, statement) => {
     await expect(withTenant(t.appDb, a.id, (tx) => tx.execute(statement))).rejects.toMatchObject({
       cause: { code: '42501' },
     });
+  });
+
+  // Seule exception (migration 0018) : les sessions terminées depuis plus de 30 jours, pour la
+  // tâche de conservation ; une session active ou récente n'est jamais supprimée.
+  it('suppression de session : aucune session active ou récente, même sans condition', async () => {
+    const count = () =>
+      withTenant(t.appDb, a.id, (tx) => tx.select().from(sessions)).then((r) => r.length);
+    const before = await count();
+    expect(before).toBeGreaterThan(0);
+    const deleted = await withTenant(t.appDb, a.id, (tx) =>
+      tx.execute(sql`DELETE FROM sessions RETURNING id`),
+    );
+    expect(deleted.rows).toEqual([]);
+    expect(await count()).toBe(before);
   });
 });

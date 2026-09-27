@@ -1,3 +1,4 @@
+import type { AuditAction } from '@dental/shared';
 import {
   addImportRowsRequestSchema,
   createImportRequestSchema,
@@ -73,6 +74,42 @@ interface Prepared {
   externalRef: string | null;
 }
 
+/**
+ * Brouillons d'import abandonnés depuis plus de 24 h : lot marqué abandonné, lignes (données
+ * personnelles brutes) effacées. Appelée à la création d'un import et par la tâche quotidienne
+ * de conservation (jobs/retention.ts). Renvoie le nombre de lots purgés.
+ */
+export async function purgeStaleDrafts(
+  tx: Transaction,
+  clinicId: string,
+  now: Date,
+): Promise<number> {
+  const staleBefore = new Date(now.getTime() - DRAFT_RETENTION_HOURS * 3_600_000);
+  const stale = await tx
+    .update(importBatches)
+    .set({ status: 'DISCARDED' })
+    .where(
+      and(
+        eq(importBatches.clinicId, clinicId),
+        eq(importBatches.status, 'DRAFT'),
+        lt(importBatches.createdAt, staleBefore),
+      ),
+    )
+    .returning({ id: importBatches.id });
+  if (stale.length > 0) {
+    await tx.delete(importRows).where(
+      and(
+        eq(importRows.clinicId, clinicId),
+        inArray(
+          importRows.batchId,
+          stale.map((s) => s.id),
+        ),
+      ),
+    );
+  }
+  return stale.length;
+}
+
 export function createImportsService(deps: { db: Database; now?: () => Date }) {
   const { db } = deps;
   const now = deps.now ?? (() => new Date());
@@ -80,7 +117,7 @@ export function createImportsService(deps: { db: Database; now?: () => Date }) {
   function audit(
     tx: Transaction,
     actor: UserActor,
-    action: string,
+    action: AuditAction,
     batchId: string,
     meta: RequestMeta,
     counts?: Partial<ImportCounts>,
@@ -213,30 +250,7 @@ export function createImportsService(deps: { db: Database; now?: () => Date }) {
     authorize(actor, 'data.import');
     const data = createImportRequestSchema.parse(input);
     return withTenant(db, actor.clinicId, async (tx) => {
-      // Brouillons abandonnés de ce cabinet : effacés (minimisation des données).
-      const staleBefore = new Date(now().getTime() - DRAFT_RETENTION_HOURS * 3_600_000);
-      const stale = await tx
-        .update(importBatches)
-        .set({ status: 'DISCARDED' })
-        .where(
-          and(
-            eq(importBatches.clinicId, actor.clinicId),
-            eq(importBatches.status, 'DRAFT'),
-            lt(importBatches.createdAt, staleBefore),
-          ),
-        )
-        .returning({ id: importBatches.id });
-      if (stale.length > 0) {
-        await tx.delete(importRows).where(
-          and(
-            eq(importRows.clinicId, actor.clinicId),
-            inArray(
-              importRows.batchId,
-              stale.map((s) => s.id),
-            ),
-          ),
-        );
-      }
+      await purgeStaleDrafts(tx, actor.clinicId, now());
       const id = uuidv7();
       const [batch] = await tx
         .insert(importBatches)
@@ -400,6 +414,12 @@ export function createImportsService(deps: { db: Database; now?: () => Date }) {
     authorize(actor, 'data.import');
     const q = importRowsReportQuerySchema.parse(query);
     return withTenant(db, actor.clinicId, async (tx) => {
+      // Lot inexistant ou d'un autre cabinet : 404, comme les autres routes (pas une liste vide).
+      const [batch] = await tx
+        .select({ id: importBatches.id })
+        .from(importBatches)
+        .where(and(eq(importBatches.clinicId, actor.clinicId), eq(importBatches.id, id)));
+      if (!batch) throw notFound();
       const where = and(
         eq(importRows.clinicId, actor.clinicId),
         eq(importRows.batchId, id),

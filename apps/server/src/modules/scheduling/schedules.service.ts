@@ -1,3 +1,4 @@
+import type { AuditAction } from '@dental/shared';
 import {
   MAX_AVAILABILITY_DAYS,
   MAX_BLOCK_LIST_DAYS,
@@ -94,7 +95,7 @@ export function createSchedulesService(deps: { db: Database; now?: () => Date })
   function audit(
     tx: Transaction,
     actor: UserActor,
-    action: string,
+    action: AuditAction,
     entity: { type: 'practitioner' | 'availability_block' | 'clinic'; id: string },
     meta: RequestMeta,
     changes: Record<string, { from?: AuditValue; to?: AuditValue }> | null = null,

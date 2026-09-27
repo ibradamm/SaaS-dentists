@@ -23,6 +23,10 @@ Projet : plateforme de gestion de cabinet dentaire. Le plan validé est dans `do
 - Toute nouvelle table qui référence `patients` est intégrée aux conditions d'annulation d'import (`imports.service.ts`, `revert`) ; le test `schema-catalog` l'impose (ADR 0005).
 - Rendez-vous : la contrainte d'exclusion est la garantie finale contre la double réservation ; toute écriture qui dépend des horaires ou des indisponibilités prend d'abord le verrou du praticien (`lockPractitioners`). Une dérogation (hors horaires, blocage) n'est jamais automatique et toujours tracée (ADR 0007).
 - Les permissions sont vérifiées côté serveur, jamais seulement dans l'interface.
+- Toute route déclare `config.access` (`public`, `authenticated`, `allow`, `permission` ou `anyPermission`) : sinon l'API refuse de démarrer. La matrice `security-matrix.int.test.ts` et le test `cross-clinic.int.test.ts` couvrent automatiquement toute nouvelle route ; une nouvelle ressource à identifiant s'ajoute à `RESOURCE_BY_PREFIX` (ADR 0011).
+- Toute nouvelle action tracée s'ajoute au catalogue `AUDIT_ACTIONS` et à son libellé (`packages/shared/src/audit.ts`, `audit-labels.ts`) : `recordAudit` refuse le reste. L'audit ne recopie jamais un contenu saisi.
+- Une erreur se journalise sous la clé `err` (sérialiseur par liste blanche) ; jamais de valeur saisie dans un message de log. La remontée Sentry passe par `ErrorReporter`, sans SDK (ADR 0011).
+- Toute tentative d'authentification (mot de passe, code) passe par `lockAttempts` et compte ses échecs pour le compte, dans la transaction validée avant l'erreur.
 - Aucun secret dans le code ni dans Git. Aucune donnée sensible dans les logs.
 - Toute action asynchrone ou externe est enfilée dans la transaction métier via `enqueue` (outbox).
 - Périmètre actuel : SaaS de gestion du cabinet uniquement. Aucune fonctionnalité WhatsApp, agent IA ou Google Calendar (extensions futures, `docs/future/`).

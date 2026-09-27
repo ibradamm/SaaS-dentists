@@ -1,3 +1,4 @@
+import { auditActionSchema, auditEntityTypeSchema } from '@dental/shared';
 import { z } from 'zod';
 import type { Transaction } from '../../db/client';
 import { AUDIT_ACTOR_TYPES, auditLogs, type AuditChanges } from '../../db/schema';
@@ -7,13 +8,9 @@ const auditValue = z.union([z.string().max(500), z.number(), z.boolean(), z.null
 export const auditEntrySchema = z.object({
   actorType: z.enum(AUDIT_ACTOR_TYPES),
   actorId: z.uuid().nullable(),
-  // Forme : domaine.action (ex. appointment.cancel, clinic.settings_update)
-  action: z.string().regex(/^[a-z][a-z_]*(\.[a-z][a-z_]*)+$/),
-  entityType: z
-    .string()
-    .regex(/^[a-z_]+$/)
-    .nullable()
-    .default(null),
+  // Catalogue fermé (packages/shared/src/audit.ts) : chaque entrée du journal a un libellé.
+  action: auditActionSchema,
+  entityType: auditEntityTypeSchema.nullable().default(null),
   entityId: z.uuid().nullable().default(null),
   // Noms de champs et valeurs non sensibles uniquement ; le contenu médical ou les messages
   // patients n'y figurent jamais (seul le nom du champ modifié est tracé).

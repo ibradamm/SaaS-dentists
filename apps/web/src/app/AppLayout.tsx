@@ -30,6 +30,7 @@ const NAV: {
   { to: '/disponibilites', label: 'Disponibilités', permission: 'appointment.read' },
   { to: '/cabinet', label: 'Cabinet', permission: 'clinic.settings.manage' },
   { to: '/utilisateurs', label: 'Utilisateurs', permission: 'user.manage' },
+  { to: '/journal', label: 'Journal', permission: 'audit.read' },
 ];
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>

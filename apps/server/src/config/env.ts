@@ -19,6 +19,28 @@ const baseShape = {
   LOG_LEVEL: logLevel.default('info'),
 };
 
+/**
+ * Remontée des erreurs (docs/adr/0011) : désactivée sans SENTRY_DSN. L'environnement Sentry
+ * est APP_ENV (development, staging, production), la version SENTRY_RELEASE (ex. commit).
+ */
+const errorReportingShape = {
+  SENTRY_DSN: z.url({ protocol: /^https?$/, error: 'DSN Sentry (URL) attendu' }).optional(),
+  SENTRY_RELEASE: z
+    .string()
+    .regex(/^[\w.\-+@/]{1,100}$/, 'version invalide')
+    .optional(),
+};
+
+function requireHttpsDsn(
+  config: { APP_ENV: AppEnv; SENTRY_DSN?: string | undefined },
+  ctx: z.RefinementCtx,
+) {
+  const deployed = config.APP_ENV === 'production' || config.APP_ENV === 'staging';
+  if (deployed && config.SENTRY_DSN && !config.SENTRY_DSN.startsWith('https://')) {
+    ctx.addIssue({ code: 'custom', path: ['SENTRY_DSN'], message: 'HTTPS obligatoire' });
+  }
+}
+
 const databaseShape = {
   DATABASE_URL: postgresUrl,
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
@@ -34,6 +56,7 @@ const apiSchema = z
   .object({
     ...baseShape,
     ...databaseShape,
+    ...errorReportingShape,
     API_HOST: z.string().min(1).default('127.0.0.1'),
     API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     // Nombre de proxys de confiance devant l'API (Caddy en production = 1). 0 = aucun.
@@ -45,6 +68,7 @@ const apiSchema = z
     DATA_ENCRYPTION_KEY: encryptionKey,
   })
   .superRefine((config, ctx) => {
+    requireHttpsDsn(config, ctx);
     const deployed = config.APP_ENV === 'production' || config.APP_ENV === 'staging';
     if (deployed && !config.WEB_ORIGIN) {
       ctx.addIssue({
@@ -68,7 +92,9 @@ const apiSchema = z
     SECURE_COOKIES: config.APP_ENV === 'production' || config.APP_ENV === 'staging',
   }));
 
-const workerSchema = z.object({ ...baseShape, ...databaseShape });
+const workerSchema = z
+  .object({ ...baseShape, ...databaseShape, ...errorReportingShape })
+  .superRefine(requireHttpsDsn);
 
 const migrateSchema = z.object({
   ...baseShape,

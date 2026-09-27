@@ -150,6 +150,19 @@ export const routes: RouteObject[] = [
             ],
           },
           {
+            element: <RequirePermission permission="audit.read" />,
+            children: [
+              {
+                path: '/journal',
+                ...page('Journal', () =>
+                  import('../pages/audit/AuditLogPage').then((m) => ({
+                    Component: m.AuditLogPage,
+                  })),
+                ),
+              },
+            ],
+          },
+          {
             element: <RequirePermission permission="clinic.settings.manage" />,
             children: [
               {

@@ -15,7 +15,7 @@ describe('isolation entre cabinets (RLS)', () => {
     clinicA = await createTestClinic(t.ownerDb);
     clinicB = await createTestClinic(t.ownerDb);
     await withTenant(t.appDb, clinicB.id, (tx) =>
-      recordAudit(tx, { actorType: 'SYSTEM', actorId: null, action: 'test.seed_b' }),
+      recordAudit(tx, { actorType: 'SYSTEM', actorId: null, action: 'clinic.settings_update' }),
     );
   });
   afterAll(() => t.close());
@@ -37,7 +37,11 @@ describe('isolation entre cabinets (RLS)', () => {
 
   it('une insertion prend le cabinet du contexte par défaut', async () => {
     const rows = await withTenant(t.appDb, clinicA.id, async (tx) => {
-      await recordAudit(tx, { actorType: 'SYSTEM', actorId: null, action: 'test.default_clinic' });
+      await recordAudit(tx, {
+        actorType: 'SYSTEM',
+        actorId: null,
+        action: 'clinic.settings_update',
+      });
       return tx.select().from(auditLogs);
     });
     expect(rows).toHaveLength(1);

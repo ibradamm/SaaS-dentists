@@ -1,3 +1,4 @@
+import type { AuditAction } from '@dental/shared';
 import type {
   Contact,
   ContactInput,
@@ -97,7 +98,7 @@ export function createPatientsService(deps: {
   function audit(
     tx: Transaction,
     actor: UserActor,
-    action: string,
+    action: AuditAction,
     patientId: string,
     meta: RequestMeta,
     fields?: string[],

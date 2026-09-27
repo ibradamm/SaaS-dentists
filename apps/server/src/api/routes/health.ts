@@ -22,24 +22,21 @@ async function checkDatabase(pool: pg.Pool): Promise<boolean> {
  * - /health/ready : l'API peut servir des requêtes (base de données joignable).
  */
 export function healthRoutes(app: FastifyInstance, options: { pool: pg.Pool }) {
-  app.get('/health/live', { logLevel: 'warn', config: { rateLimit: false } }, () => {
+  const config = { access: { public: true }, rateLimit: false } as const;
+  app.get('/health/live', { logLevel: 'warn', config }, () => {
     const body: LivenessResponse = { status: 'ok' };
     return body;
   });
 
-  app.get(
-    '/health/ready',
-    { logLevel: 'warn', config: { rateLimit: false } },
-    async (request, reply) => {
-      try {
-        await checkDatabase(options.pool);
-        const body: ReadinessResponse = { status: 'ok', checks: { database: 'ok' } };
-        return body;
-      } catch (error) {
-        request.log.error({ err: error }, 'base de données indisponible');
-        const body: ReadinessResponse = { status: 'error', checks: { database: 'error' } };
-        return reply.status(503).send(body);
-      }
-    },
-  );
+  app.get('/health/ready', { logLevel: 'warn', config }, async (request, reply) => {
+    try {
+      await checkDatabase(options.pool);
+      const body: ReadinessResponse = { status: 'ok', checks: { database: 'ok' } };
+      return body;
+    } catch (error) {
+      request.log.error({ err: error }, 'base de données indisponible');
+      const body: ReadinessResponse = { status: 'error', checks: { database: 'error' } };
+      return reply.status(503).send(body);
+    }
+  });
 }

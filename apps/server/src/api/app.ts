@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import type { Logger } from '../config/logger';
+import type { AuditLogService } from '../modules/audit/audit-log.service';
 import type { AuthService } from '../modules/auth/auth.service';
 import type { ClinicService } from '../modules/clinic/clinic.service';
 import type { ImportsService } from '../modules/imports/imports.service';
@@ -16,7 +17,9 @@ import type { PractitionersService } from '../modules/scheduling/practitioners.s
 import type { SchedulesService } from '../modules/scheduling/schedules.service';
 import type { UsersService } from '../modules/users/users.service';
 import { registerAuth } from './auth-plugin';
-import { errorHandler, notFoundHandler } from './error-handler';
+import { auditRoutes } from './routes/audit';
+import { noopReporter, type ErrorReporter } from '../lib/error-reporter';
+import { createErrorHandler, notFoundHandler } from './error-handler';
 import { authRoutes } from './routes/auth';
 import { clinicRoutes } from './routes/clinic';
 import { healthRoutes } from './routes/health';
@@ -54,9 +57,12 @@ export interface AppDependencies {
   appointments: AppointmentsService;
   finance: FinanceService;
   stats: StatsService;
+  auditLog: AuditLogService;
   webOrigin: string;
   secureCookies: boolean;
   rateLimits?: RateLimits;
+  /** Remontée des erreurs imprévues (Sentry) ; aucune par défaut. */
+  errorReporter?: ErrorReporter;
 }
 
 const BODY_LIMIT_BYTES = 1024 * 1024;
@@ -85,7 +91,7 @@ export async function buildApp(deps: AppDependencies): Promise<FastifyInstance> 
   // Limiteur en mémoire : suffisant pour une seule instance d'API (MVP). Plusieurs instances
   // exigeront un stockage partagé (docs/adr/0003).
   await app.register(rateLimit, { global: true, ...limits.global });
-  app.setErrorHandler(errorHandler);
+  app.setErrorHandler(createErrorHandler(deps.errorReporter ?? noopReporter));
   app.setNotFoundHandler(notFoundHandler);
 
   const cookies = { secure: deps.secureCookies };
@@ -101,6 +107,7 @@ export async function buildApp(deps: AppDependencies): Promise<FastifyInstance> 
   appointmentsRoutes(app, { appointments: deps.appointments });
   financeRoutes(app, { finance: deps.finance });
   statsRoutes(app, { stats: deps.stats });
+  auditRoutes(app, { auditLog: deps.auditLog });
 
   return app;
 }

@@ -190,6 +190,7 @@ describe('navigation', () => {
         'Disponibilités',
         'Cabinet',
         'Utilisateurs',
+        'Journal',
       ],
     ],
   ])('%s : menu selon les permissions', async (role, expected) => {

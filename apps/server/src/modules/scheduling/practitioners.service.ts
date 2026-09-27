@@ -1,3 +1,4 @@
+import type { AuditAction } from '@dental/shared';
 import {
   createAppointmentTypeRequestSchema,
   createPractitionerRequestSchema,
@@ -45,7 +46,7 @@ export function createPractitionersService(deps: { db: Database; now?: () => Dat
   function audit(
     tx: Transaction,
     actor: UserActor,
-    action: string,
+    action: AuditAction,
     entity: { type: 'practitioner' | 'appointment_type'; id: string },
     meta: RequestMeta,
     changes: AuditChanges | null = null,

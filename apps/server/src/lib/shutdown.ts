@@ -1,4 +1,5 @@
 import type { Logger } from '../config/logger';
+import type { ErrorReporter } from './error-reporter';
 
 const SHUTDOWN_TIMEOUT_MS = 25_000;
 
@@ -23,4 +24,18 @@ export function onShutdown(logger: Logger, close: () => Promise<void>): void {
   };
   process.once('SIGTERM', handler);
   process.once('SIGINT', handler);
+}
+
+/**
+ * Erreur non rattrapée (exception ou promesse rejetée) : journalisée, remontée, puis arrêt du
+ * processus (état inconnu) ; l'orchestrateur le redémarre.
+ */
+export function exitOnFatalError(logger: Logger, reporter: ErrorReporter): void {
+  const fatal = (error: unknown) => {
+    logger.fatal({ err: error }, 'erreur non rattrapée');
+    reporter.report(error);
+    void reporter.flush().finally(() => process.exit(1));
+  };
+  process.on('uncaughtException', fatal);
+  process.on('unhandledRejection', fatal);
 }

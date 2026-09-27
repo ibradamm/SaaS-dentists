@@ -43,7 +43,7 @@ describe("journal d'audit", () => {
   it("est annulé avec la transaction métier qui l'accompagne", async () => {
     await expect(
       withTenant(t.appDb, clinic.id, async (tx) => {
-        await recordAudit(tx, { actorType: 'SYSTEM', actorId: null, action: 'test.rolled_back' });
+        await recordAudit(tx, { actorType: 'SYSTEM', actorId: null, action: 'import.discarded' });
         throw new Error('échec après audit');
       }),
     ).rejects.toThrow('échec après audit');
@@ -51,7 +51,7 @@ describe("journal d'audit", () => {
       tx
         .select()
         .from(auditLogs)
-        .where(sql`${auditLogs.action} = 'test.rolled_back'`),
+        .where(sql`${auditLogs.action} = 'import.discarded'`),
     );
     expect(rows).toEqual([]);
   });
@@ -59,9 +59,22 @@ describe("journal d'audit", () => {
   it('rejette une action mal formée avant toute écriture', async () => {
     await expect(
       withTenant(t.appDb, clinic.id, (tx) =>
-        recordAudit(tx, { actorType: 'SYSTEM', actorId: null, action: 'DROP TABLE' }),
+        recordAudit(tx, { actorType: 'SYSTEM', actorId: null, action: 'DROP TABLE' as never }),
       ),
     ).rejects.toThrow();
+  });
+
+  it('rejette une action ou un type d’élément absents du catalogue (chaque entrée a un libellé)', async () => {
+    for (const entry of [
+      { action: 'patient.exported' },
+      { action: 'patient.updated', entityType: 'dossier' },
+    ]) {
+      await expect(
+        withTenant(t.appDb, clinic.id, (tx) =>
+          recordAudit(tx, { actorType: 'SYSTEM', actorId: null, ...entry } as never),
+        ),
+      ).rejects.toThrow();
+    }
   });
 
   it('rejette une valeur non scalaire dans changes (pas de contenu libre imbriqué)', async () => {
@@ -70,7 +83,7 @@ describe("journal d'audit", () => {
         recordAudit(tx, {
           actorType: 'SYSTEM',
           actorId: null,
-          action: 'test.bad_changes',
+          action: 'patient.updated',
           changes: { notes: { to: { secret: 'x' } as unknown as string } },
         }),
       ),

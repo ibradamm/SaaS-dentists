@@ -1,3 +1,4 @@
+import type { AuditAction } from '@dental/shared';
 import type {
   ClinicUser,
   CreateUserRequest,
@@ -56,7 +57,7 @@ export function createUsersService(deps: { db: Database; now?: () => Date }) {
   function audit(
     tx: Transaction,
     actor: UserActor,
-    action: string,
+    action: AuditAction,
     targetId: string,
     meta: RequestMeta,
     changes?: Record<string, { from?: string | null; to?: string | null }>,
