@@ -1,7 +1,7 @@
 import { ROLE_LABELS, type Permission } from '@dental/shared';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useMatches } from 'react-router';
-import { can, useMe } from '../lib/auth';
+import { STATS_PERMISSIONS, can, useMe } from '../lib/auth';
 import { LogoutButton } from '../pages/LogoutButton';
 import { PatientQuickSearch } from './PatientQuickSearch';
 
@@ -14,12 +14,19 @@ export interface RouteHandle {
  * Menu selon les permissions. Masquage d'interface uniquement : chaque page et chaque action
  * restent contrôlées par le serveur.
  */
-const NAV: { to: string; label: string; permission: Permission | null; end?: boolean }[] = [
+const NAV: {
+  to: string;
+  label: string;
+  /** Aucune, une permission, ou au moins une d'une liste. */
+  permission: Permission | readonly Permission[] | null;
+  end?: boolean;
+}[] = [
   { to: '/', label: "Aujourd'hui", permission: null, end: true },
   { to: '/agenda', label: 'Agenda', permission: 'appointment.read' },
   { to: '/patients', label: 'Patients', permission: 'patient.read' },
   { to: '/encaissements', label: 'À encaisser', permission: 'payment.read' },
   { to: '/revenus', label: 'Revenus', permission: 'finance.reports.read' },
+  { to: '/statistiques', label: 'Statistiques', permission: STATS_PERMISSIONS },
   { to: '/disponibilites', label: 'Disponibilités', permission: 'appointment.read' },
   { to: '/cabinet', label: 'Cabinet', permission: 'clinic.settings.manage' },
   { to: '/utilisateurs', label: 'Utilisateurs', permission: 'user.manage' },
@@ -54,7 +61,11 @@ export function AppLayout() {
 
   if (!me) return null;
   const close = () => setMenuOpen(false);
-  const items = NAV.filter((i) => i.permission === null || can(me, i.permission));
+  const items = NAV.filter(
+    (i) =>
+      i.permission === null ||
+      (typeof i.permission === 'string' ? [i.permission] : i.permission).some((p) => can(me, p)),
+  );
 
   return (
     <div className="min-h-screen">

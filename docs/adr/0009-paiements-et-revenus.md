@@ -120,3 +120,24 @@ Au MVP, l'annulation d'un paiement corrige une **erreur de saisie** : l'argent n
 | Date d'encaissement saisie librement | Permettrait d'antidater dans une période close |
 | Contrôle « jamais plus payé que dû » seulement dans le code | Ne résiste pas à deux saisies simultanées ; la base verrouille et vérifie |
 | Paiement sans montant dû (avoir « flottant ») | Deux restants dus différents (par acte, par patient) ; l'acompte sur devis couvre le besoin |
+
+## 10. Réponses du porteur du projet (validation de la Phase 7, 2026-09-27)
+
+| # | Question | Réponse | Conséquence dans le code |
+|---|---|---|---|
+| 1 | Revenus visibles par le dentiste | Tout le cabinet, réparti par praticien. Une limitation de certains praticiens à leurs propres revenus doit rester possible | Toute lecture de revenus (page « Revenus », journal, tableau de bord) passe par une seule fonction de **périmètre** (`revenueScope`) qui renvoie aujourd'hui « tout le cabinet ». La limitation s'ajoutera par une permission `finance.reports.read_own` et une seconde branche de cette fonction (praticiens liés au compte), sans toucher aux requêtes |
+| 2 | Annulation d'un acte par la secrétaire | Refusée, même non payé | Inchangé : `payment.void` réservé à l'administrateur et au dentiste |
+| 3 | Clôture de période | Pas au MVP ; doit pouvoir s'ajouter sans refonte | Voir ci-dessous |
+| 4 | Reçu patient | Plus tard, sans bloquer les phases en cours | Ajouté aux extensions futures (`docs/future/README.md`) |
+
+**Pourquoi la clôture de période s'ajoutera sans refonte :**
+- les données nécessaires existent déjà et ne changent jamais : instant d'encaissement (`received_at`), instant d'annulation (`voided_at`, `cancelled_at`), montants ;
+- les revenus d'une période « tels que connus à une date T » se recalculent donc exactement : paiements reçus dans la période, sauf ceux annulés avant T ;
+- le calcul des revenus est centralisé dans le service des finances ; la clôture n'aura qu'un seul endroit à modifier.
+
+**Forme prévue de la clôture (non développée) :**
+1. une table `finance_periods` (cabinet, mois, date de clôture, auteur), en ajout seul ;
+2. la clôture fige la période : ses revenus sont lus « tels que connus à la date de clôture » ;
+3. un paiement d'une période close annulé ensuite apparaît comme **correction** dans la période de son annulation, au lieu de modifier la période close ;
+4. une permission dédiée (`finance.period.close`) pour clôturer.
+

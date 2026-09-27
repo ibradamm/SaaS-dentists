@@ -1,4 +1,4 @@
-import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, type QueryClient } from '@tanstack/react-query';
 import { api } from './api';
 
 /*
@@ -27,6 +27,16 @@ export const patientAccountKey = (patientId: string) => ['patient-account', pati
 export const RECEIVABLES_KEY = ['receivables'] as const;
 /** Revenus et journal des encaissements, toutes périodes. */
 export const REVENUE_KEY = ['revenue'] as const;
+/** Tableau de bord, toutes périodes et tous praticiens. */
+export const DASHBOARD_KEY = ['dashboard'] as const;
+
+/** Tableau de bord d'une période (calculé par le serveur, sections selon les permissions). */
+export const useDashboard = (from: string, to: string, practitionerId: string | null) =>
+  useQuery({
+    queryKey: [...DASHBOARD_KEY, from, to, practitionerId ?? 'tous'],
+    queryFn: () => api.dashboard({ from, to, practitionerId }),
+    placeholderData: keepPreviousData,
+  });
 
 export const usePatientAccount = (patientId: string, enabled = true) =>
   useQuery({
@@ -38,7 +48,7 @@ export const usePatientAccount = (patientId: string, enabled = true) =>
 /** Après toute écriture financière : compte du patient, restes à encaisser et revenus. */
 export async function refreshFinance(queryClient: QueryClient, patientId: string) {
   await Promise.all(
-    [patientAccountKey(patientId), RECEIVABLES_KEY, REVENUE_KEY].map((queryKey) =>
+    [patientAccountKey(patientId), RECEIVABLES_KEY, REVENUE_KEY, DASHBOARD_KEY].map((queryKey) =>
       queryClient.invalidateQueries({ queryKey }),
     ),
   );

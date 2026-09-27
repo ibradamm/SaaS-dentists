@@ -1,4 +1,5 @@
 import {
+  dashboardResponseSchema,
   chargeSchema,
   patientAccountSchema,
   paymentResultSchema,
@@ -281,6 +282,8 @@ export const api = {
   receivables: () => request('GET', '/api/receivables', receivablesResponseSchema),
   revenue: (query: { from: string; to: string }) =>
     request('GET', `/api/finance/revenue?${toQuery(query)}`, revenueResponseSchema),
+  dashboard: (query: { from: string; to: string; practitionerId?: string | null }) =>
+    request('GET', `/api/dashboard?${toQuery(query)}`, dashboardResponseSchema),
   paymentsJournal: (query: { from: string; to: string }) =>
     request('GET', `/api/finance/payments?${toQuery(query)}`, paymentsJournalResponseSchema).then(
       (r) => r.payments,

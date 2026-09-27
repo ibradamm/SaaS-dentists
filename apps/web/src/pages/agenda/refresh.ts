@@ -1,5 +1,6 @@
 import type { Appointment } from '@dental/shared';
 import type { QueryClient } from '@tanstack/react-query';
+import { DASHBOARD_KEY } from '../../lib/queries';
 
 export const appointmentKey = (id: string) => ['appointment', id] as const;
 
@@ -14,5 +15,6 @@ export async function refreshAgenda(queryClient: QueryClient, appointment: Appoi
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ['appointments'] }),
     queryClient.invalidateQueries({ queryKey: ['patient-appointments', appointment.patient.id] }),
+    queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY }),
   ]);
 }

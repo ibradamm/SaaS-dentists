@@ -7,6 +7,7 @@ import {
   availability,
   clinic,
   consultation,
+  dashboard,
   patientDetail,
   practitioner,
 } from '../../test/fixtures';
@@ -58,6 +59,7 @@ function setup(
       status: 200,
       body: availability(practitioners.map((p) => p.id)),
     }),
+    'GET /api/dashboard': () => ({ status: 200, body: dashboard(session.role) }),
     'GET /api/appointments': (call) => ({
       status: 200,
       body: {
@@ -160,8 +162,22 @@ describe('navigation', () => {
       .map((l) => l.textContent);
 
   it.each<[Role, string[]]>([
-    ['SECRETARY', ["Aujourd'hui", 'Agenda', 'Patients', 'À encaisser', 'Disponibilités']],
-    ['DENTIST', ["Aujourd'hui", 'Agenda', 'Patients', 'À encaisser', 'Revenus', 'Disponibilités']],
+    [
+      'SECRETARY',
+      ["Aujourd'hui", 'Agenda', 'Patients', 'À encaisser', 'Statistiques', 'Disponibilités'],
+    ],
+    [
+      'DENTIST',
+      [
+        "Aujourd'hui",
+        'Agenda',
+        'Patients',
+        'À encaisser',
+        'Revenus',
+        'Statistiques',
+        'Disponibilités',
+      ],
+    ],
     [
       'ADMIN',
       [
@@ -170,6 +186,7 @@ describe('navigation', () => {
         'Patients',
         'À encaisser',
         'Revenus',
+        'Statistiques',
         'Disponibilités',
         'Cabinet',
         'Utilisateurs',

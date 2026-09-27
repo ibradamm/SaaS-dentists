@@ -92,7 +92,7 @@ Règles :
 | Praticiens et disponibilités | `GET/POST /api/practitioners`, `PATCH /:id`, archivage ; `GET/POST /api/appointment-types`, `PATCH /:id`, archivage ; `GET/PUT /api/practitioners/:id/schedules`, `DELETE …/schedules/:periodId` ; `GET/POST /api/availability-blocks`, `PUT/DELETE /:id` ; `GET /api/availability?from&to&practitionerId` | Fait (ADR 0006) |
 | Rendez-vous | `GET /api/appointments?from&to&practitionerId&includeCancelled`, `GET /api/appointments/:id`, `POST /api/appointments` (confirmation explicite `allowOutsideAvailability`), `PATCH /:id` (déplacement, version), `POST /:id/status` (honoré, patient absent, annulé, correction) ; `GET /api/patients/:id/appointments` ; `GET /api/availability/slots` ; conflits renvoyés par les écritures d'horaires et d'indisponibilités | Fait (ADR 0007) |
 | Finances | `GET /api/patients/:id/account` ; `POST /api/charges` (clé d'idempotence, paiement immédiat facultatif), `POST /api/charges/:id/cancel` ; `POST /api/payments` (clé d'idempotence), `POST /api/payments/:id/void` ; `GET /api/receivables` ; `GET /api/finance/revenue?from&to`, `GET /api/finance/payments?from&to` | Fait (ADR 0009) |
-| Tableau de bord et statistiques | indicateurs du jour, séries temporelles | Phase 8 |
+| Tableau de bord et statistiques | `GET /api/dashboard?from&to&practitionerId` : activité, occupation, patients, restant à encaisser, honorés sans acte, revenus ; sections selon les permissions | Fait (ADR 0010) |
 | Audit | `GET /api/audit-logs` (filtres, pagination) | Phase 9 |
 
 Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, partagés par le serveur et l'interface.
@@ -124,7 +124,7 @@ Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, 
 | Import de fichiers | papaparse (CSV), read-excel-file (xlsx), lecture dans le navigateur | ADR 0005 |
 | Agenda | Grille maison (React, `Intl`), sans bibliothèque de calendrier | FullCalendar écarté : fuseau nommé du cabinet seulement avec un greffon Luxon (> 200 ko) ; pas de glisser-déposer au MVP (ADR 0007, section 7) |
 | Dates et fuseaux | Luxon (serveur) ; `Intl` dans l'interface pour l'affichage dans le fuseau du cabinet | Fuseaux IANA, changements d'heure (ADR 0006) |
-| Graphiques (Phase 8) | Recharts | Intégration React |
+| Graphiques | Écrits à la main (HTML et CSS) | Colonnes, barres et jauges simples : une bibliothèque ajouterait plusieurs dizaines de ko (ADR 0010) |
 | Tests | Vitest, Testing Library, Playwright (E2E en Phase 10) | |
 | Qualité | ESLint (règles de frontières), Prettier, gitleaks, `pnpm audit` en CI, budget du chargement initial de l'interface (`pnpm check:bundle`) | |
 | Déploiement (Phase 11) | Conteneurs, Caddy (TLS automatique), PostgreSQL managé avec restauration à un instant donné | |
@@ -262,8 +262,8 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | 4 | Cabinet et disponibilités : profil du cabinet, praticiens (un ou plusieurs), types de rendez-vous, horaires hebdomadaires datés, absences et blocages, calcul des disponibilités (pas de table d'horaires d'ouverture, ADR 0006) | 5, 10, 11 | Fait |
 | 5 | Rendez-vous et agenda : création, déplacement, annulation, statuts, anti double réservation, vues jour et semaine, historique patient (ADR 0007) | 8, 9 | Fait |
 | 6 | Applications web dentiste et secrétaire : parcours quotidiens par rôle, ergonomie, accessibilité, téléphone et tablette (ADR 0008) | 12, 13 | Fait |
-| 7 | Paiements et revenus encaissés : actes à encaisser, paiements partiels, restant dû, annulations motivées, « À encaisser », revenus par période (ADR 0009) | 14 | Fait (en attente de validation) |
-| 8 | Tableau de bord et statistiques | 15, 16 | À faire |
+| 7 | Paiements et revenus encaissés : actes à encaisser, paiements partiels, restant dû, annulations motivées, « À encaisser », revenus par période (ADR 0009) | 14 | Fait |
+| 8 | Tableau de bord et statistiques : indicateurs du jour sur l'accueil, page « Statistiques » par période et praticien, calculs en base dans le fuseau du cabinet (ADR 0010) | 15, 16 | Fait (en attente de validation) |
 | 9 | Journal d'audit consultable et audit de sécurité : revue OWASP ASVS, purges, rétention, procédure d'effacement | 17, 18 | À faire |
 | 10 | Tests complets : E2E Playwright en CI, charge, restauration | 19 | À faire |
 | 11 | Déploiement : hébergement, secrets, sauvegardes, supervision, procédures | 20 | À faire |

@@ -10,3 +10,5 @@ export * from './scheduling';
 export * from './appointments';
 export * from './money';
 export * from './finance';
+export * from './periods';
+export * from './stats';

@@ -13,6 +13,7 @@ import { createPractitionersService } from './modules/scheduling/practitioners.s
 import { createSchedulesService } from './modules/scheduling/schedules.service';
 import { createAppointmentsService } from './modules/appointments/appointments.service';
 import { createFinanceService } from './modules/finance/finance.service';
+import { createStatsService } from './modules/stats/stats.service';
 import { createUsersService } from './modules/users/users.service';
 
 const config = loadApiConfig();
@@ -44,6 +45,7 @@ try {
     schedules: createSchedulesService({ db }),
     appointments: createAppointmentsService({ db }),
     finance: createFinanceService({ db }),
+    stats: createStatsService({ db }),
     webOrigin: config.WEB_ORIGIN,
     secureCookies: config.SECURE_COOKIES,
   });

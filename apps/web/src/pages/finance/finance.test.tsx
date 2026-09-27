@@ -1,5 +1,6 @@
 import {
   formatCents,
+  periodError,
   paymentStateOf,
   type Charge,
   type MeResponse,
@@ -12,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDS, appointment, clinic, patientDetail, practitioner } from '../../test/fixtures';
 import { me, mockApi, renderApp, type MockCall } from '../../test/render';
 import { newIdempotencyKey } from './idempotency';
-import { periodError, periodPresets } from './RevenuePage';
+import { periodPresets } from './RevenuePage';
 
 // Lundi 28 septembre 2026, 10 h à Paris : seule l'horloge est simulée.
 beforeEach(() => {

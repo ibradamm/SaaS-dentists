@@ -24,9 +24,15 @@ export function RequireSession({ allow }: { allow: SessionRestriction | null }) 
   return <Outlet />;
 }
 
-export function RequirePermission({ permission }: { permission: Permission }) {
+/** Page réservée : une permission, ou au moins une d'une liste. */
+export function RequirePermission({
+  permission,
+}: {
+  permission: Permission | readonly Permission[];
+}) {
   const { data: me } = useMe();
-  if (!can(me, permission)) {
+  const allowed = typeof permission === 'string' ? [permission] : permission;
+  if (!allowed.some((p) => can(me, p))) {
     return (
       <div className="p-6">
         <Alert>Vous n&apos;avez pas accès à cette page.</Alert>

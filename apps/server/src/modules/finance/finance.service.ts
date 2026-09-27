@@ -38,8 +38,19 @@ import { pgErrorCode } from '../../lib/pg-errors';
 import { recordAudit } from '../audit/audit.service';
 import type { RequestMeta, UserActor } from '../auth/auth.types';
 import { authorize } from '../auth/authorize';
-import { localDateOf } from '../scheduling/local-time';
+import { periodBuckets } from '../scheduling/buckets';
 import { checkRange, clinicZone, rangeInstants } from '../scheduling/queries';
+import {
+  cents,
+  paidByCharge,
+  remainingSummary,
+  revenueByBucket,
+  revenueByMethod,
+  revenueByPractitioner,
+  revenueScope,
+  revenueTotals,
+  scopedCharges,
+} from './queries';
 
 export type FinanceService = ReturnType<typeof createFinanceService>;
 
@@ -72,13 +83,6 @@ const replayConflict = () =>
     'Cette saisie a déjà été enregistrée avec d’autres valeurs. Rechargez la page.',
     409,
   );
-
-/** Somme de centimes lue en base (bigint, renvoyé en chaîne) : entier exact exigé. */
-function cents(value: unknown): number {
-  const n = Number(value ?? 0);
-  if (!Number.isSafeInteger(n)) throw new Error('Somme hors limites');
-  return n;
-}
 
 type AuditValue = string | number | boolean | null;
 
@@ -637,31 +641,6 @@ export function createFinanceService(deps: { db: Database; now?: () => Date }) {
 
   // --- Restant dû et revenus ---------------------------------------------------------------
 
-  /** Paiements valides par montant dû (sous-requête). */
-  function paidByCharge(tx: Transaction, clinicId: string) {
-    return tx
-      .select({
-        chargeId: payments.chargeId,
-        paid: sql<string>`sum(${payments.amountCents})`.as('paid'),
-      })
-      .from(payments)
-      .where(and(eq(payments.clinicId, clinicId), eq(payments.status, 'RECORDED')))
-      .groupBy(payments.chargeId)
-      .as('paid_by_charge');
-  }
-
-  async function remainingTotal(tx: Transaction, clinicId: string): Promise<number> {
-    const paid = paidByCharge(tx, clinicId);
-    const [row] = await tx
-      .select({
-        remaining: sql<string>`coalesce(sum(${charges.amountCents} - coalesce(${paid.paid}, 0)), 0)`,
-      })
-      .from(charges)
-      .leftJoin(paid, eq(paid.chargeId, charges.id))
-      .where(and(eq(charges.clinicId, clinicId), eq(charges.status, 'OPEN')));
-    return cents(row?.remaining);
-  }
-
   async function receivables(actor: UserActor): Promise<ReceivablesResponse> {
     authorize(actor, 'payment.read');
     return withTenant(db, actor.clinicId, async (tx) => {
@@ -693,7 +672,7 @@ export function createFinanceService(deps: { db: Database; now?: () => Date }) {
         .limit(500);
       return {
         currency: await clinicCurrency(tx, actor.clinicId),
-        totalRemainingCents: await remainingTotal(tx, actor.clinicId),
+        totalRemainingCents: (await remainingSummary(tx, actor.clinicId)).totalRemainingCents,
         patients: rows.map((r) => ({
           patient: { id: r.id, lastName: r.lastName, firstName: r.firstName },
           remainingCents: cents(r.remaining),
@@ -708,75 +687,26 @@ export function createFinanceService(deps: { db: Database; now?: () => Date }) {
     actor: UserActor,
     query: Record<string, unknown>,
   ): Promise<RevenueResponse> {
-    authorize(actor, 'finance.reports.read');
+    const scope = revenueScope(actor);
     const q = revenueQuerySchema.parse(query);
     checkRange(q.from, q.to, MAX_REVENUE_DAYS);
     return withTenant(db, actor.clinicId, async (tx) => {
-      const zone = await clinicZone(tx, actor.clinicId);
-      const range = rangeInstants(zone, q.from, q.to);
-      const rows = await tx
-        .select({
-          amountCents: payments.amountCents,
-          status: payments.status,
-          method: payments.method,
-          receivedAt: payments.receivedAt,
-          practitionerId: charges.practitionerId,
-        })
-        .from(payments)
-        .innerJoin(
-          charges,
-          and(eq(charges.clinicId, payments.clinicId), eq(charges.id, payments.chargeId)),
-        )
-        .where(
-          and(
-            eq(payments.clinicId, actor.clinicId),
-            gte(payments.receivedAt, range.start),
-            lt(payments.receivedAt, range.end),
-          ),
-        );
-      const names = new Map(
-        (
-          await tx
-            .select({ id: practitioners.id, displayName: practitioners.displayName })
-            .from(practitioners)
-            .where(eq(practitioners.clinicId, actor.clinicId))
-        ).map((p) => [p.id, p.displayName]),
-      );
-      const valid = rows.filter((r) => r.status === 'RECORDED');
-      const voided = rows.filter((r) => r.status === 'VOIDED');
-      const group = <K>(key: (r: (typeof rows)[number]) => K) => {
-        const map = new Map<K, { amountCents: number; count: number }>();
-        for (const r of valid) {
-          const bucket = map.get(key(r)) ?? { amountCents: 0, count: 0 };
-          bucket.amountCents += r.amountCents;
-          bucket.count += 1;
-          map.set(key(r), bucket);
-        }
-        return [...map.entries()];
-      };
-      const sum = (list: typeof rows) => list.reduce((s, r) => s + r.amountCents, 0);
+      // Jours du cabinet (local-time.ts), jamais ceux du serveur ; agrégation en base.
+      const days = periodBuckets(await clinicZone(tx, actor.clinicId), q, 'day');
+      const filter = { clinicId: actor.clinicId, start: days.start, end: days.end, scope };
+      const totals = await revenueTotals(tx, filter);
+      const byDay = await revenueByBucket(tx, filter, days.lower);
       return {
         currency: await clinicCurrency(tx, actor.clinicId),
         from: q.from,
         to: q.to,
-        totalCents: sum(valid),
-        paymentsCount: valid.length,
-        voided: { amountCents: sum(voided), count: voided.length },
-        byMethod: group((r) => r.method)
-          .map(([method, b]) => ({ method, ...b }))
-          .sort((x, y) => y.amountCents - x.amountCents),
-        byPractitioner: group((r) => r.practitionerId)
-          .map(([practitionerId, b]) => ({
-            practitionerId,
-            displayName: practitionerId ? (names.get(practitionerId) ?? null) : null,
-            ...b,
-          }))
-          .sort((x, y) => y.amountCents - x.amountCents),
-        // Jour local du cabinet (local-time.ts), jamais celui du serveur.
-        byDay: group((r) => localDateOf(r.receivedAt.getTime(), zone))
-          .map(([date, b]) => ({ date, ...b }))
-          .sort((x, y) => x.date.localeCompare(y.date)),
-        remainingCents: await remainingTotal(tx, actor.clinicId),
+        totalCents: totals.totalCents,
+        paymentsCount: totals.count,
+        voided: totals.voided,
+        byMethod: await revenueByMethod(tx, filter),
+        byPractitioner: await revenueByPractitioner(tx, filter),
+        byDay: days.starts.map((date, i) => ({ date, ...byDay[i]! })).filter((d) => d.count > 0),
+        remainingCents: (await remainingSummary(tx, actor.clinicId)).totalRemainingCents,
       };
     });
   }
@@ -785,7 +715,7 @@ export function createFinanceService(deps: { db: Database; now?: () => Date }) {
     actor: UserActor,
     query: Record<string, unknown>,
   ): Promise<PaymentsJournalResponse> {
-    authorize(actor, 'finance.reports.read');
+    const scope = revenueScope(actor);
     const q = revenueQuerySchema.parse(query);
     checkRange(q.from, q.to, MAX_REVENUE_DAYS);
     return withTenant(db, actor.clinicId, async (tx) => {
@@ -793,7 +723,11 @@ export function createFinanceService(deps: { db: Database; now?: () => Date }) {
       const list = await readPayments(
         tx,
         actor.clinicId,
-        and(gte(payments.receivedAt, range.start), lt(payments.receivedAt, range.end)),
+        and(
+          gte(payments.receivedAt, range.start),
+          lt(payments.receivedAt, range.end),
+          scopedCharges(tx, actor.clinicId, scope),
+        ),
       );
       const shown = list.slice(0, MAX_JOURNAL_PAYMENTS);
       const chargeIds = [...new Set(shown.map((p) => p.chargeId))];

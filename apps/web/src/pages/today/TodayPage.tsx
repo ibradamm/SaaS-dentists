@@ -11,6 +11,7 @@ import { useAllPractitioners, useClinic } from '../../lib/queries';
 import { AppointmentList } from '../agenda/AppointmentList';
 import { ColorSwatch } from '../settings/colors';
 import { SetupChecklist } from './SetupChecklist';
+import { TodayIndicators } from './TodayIndicators';
 
 const actionLink =
   'inline-flex min-h-11 items-center rounded-md px-4 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700';
@@ -107,6 +108,9 @@ export function TodayPage() {
       </div>
 
       {can(me, 'clinic.settings.manage') && <SetupChecklist today={today} />}
+
+      {/* Même périmètre que la journée affichée : « Ma journée » ou tout le cabinet. */}
+      <TodayIndicators today={today} practitionerId={filter ?? null} />
 
       {active.length === 0 ? (
         !can(me, 'clinic.settings.manage') && (

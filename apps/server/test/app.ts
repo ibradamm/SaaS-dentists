@@ -15,6 +15,7 @@ import { createPractitionersService } from '../src/modules/scheduling/practition
 import { createSchedulesService } from '../src/modules/scheduling/schedules.service';
 import { createAppointmentsService } from '../src/modules/appointments/appointments.service';
 import { createFinanceService } from '../src/modules/finance/finance.service';
+import { createStatsService } from '../src/modules/stats/stats.service';
 import { createUsersService } from '../src/modules/users/users.service';
 
 export const TEST_WEB_ORIGIN = 'http://127.0.0.1:5173';
@@ -52,6 +53,7 @@ export async function buildTestApp(
     schedules: createSchedulesService({ db, ...now }),
     appointments: createAppointmentsService({ db, ...now }),
     finance: createFinanceService({ db, ...now }),
+    stats: createStatsService({ db, ...now }),
     webOrigin: TEST_WEB_ORIGIN,
     secureCookies: false,
     rateLimits: options.rateLimits ?? RELAXED,

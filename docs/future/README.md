@@ -9,6 +9,7 @@ Le périmètre actuel est le SaaS de gestion du cabinet, utilisé par le personn
 | Google Calendar (copie de l'agenda) | Section H.3 (synchronisation, conflits, compte propriétaire du cabinet) | Port `CalendarPort` ; tables `calendar_connections`, `calendar_event_links` |
 | Rappels aux patients (SMS, e-mail, WhatsApp) | Section G.4 | Modèle de consentement ; fournisseur d'envoi ; table `notifications` |
 | Portail patient | Section I (rôle PATIENT prévu) | Principal patient distinct du personnel |
+| Reçu patient (demandé le 2026-09-27, après la Phase 7) | ADR 0009 : chaque paiement porte déjà montant, moyen, instant d'encaissement, auteur, patient et acte | Numérotation continue par cabinet, sans trou (table de séquences verrouillée) ; document non modifiable produit par le worker (outbox) ; mentions obligatoires selon le pays (question L1) ; reçu d'annulation si le paiement est annulé ; permission de réimpression |
 
 ## Fondations conservées dans le code
 

@@ -4,6 +4,7 @@ import { ChangePasswordPage } from '../pages/ChangePasswordPage';
 import { LoginPage } from '../pages/LoginPage';
 import { MfaVerifyPage } from '../pages/MfaVerifyPage';
 import { AppLayout, type RouteHandle } from './AppLayout';
+import { STATS_PERMISSIONS } from '../lib/auth';
 import { RequirePermission, RequireSession } from './guards';
 
 /*
@@ -133,6 +134,17 @@ export const routes: RouteObject[] = [
                   import('../pages/finance/RevenuePage').then((m) => ({
                     Component: m.RevenuePage,
                   })),
+                ),
+              },
+            ],
+          },
+          {
+            element: <RequirePermission permission={STATS_PERMISSIONS} />,
+            children: [
+              {
+                path: '/statistiques',
+                ...page('Statistiques', () =>
+                  import('../pages/stats/StatsPage').then((m) => ({ Component: m.StatsPage })),
                 ),
               },
             ],

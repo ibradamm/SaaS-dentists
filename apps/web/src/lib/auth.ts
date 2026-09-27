@@ -8,6 +8,14 @@ export function useMe() {
   return useQuery({ queryKey: ME_QUERY_KEY, queryFn: api.me, staleTime: 60_000, retry: false });
 }
 
+/** Permissions dont dépend au moins une section du tableau de bord (docs/adr/0010). */
+export const STATS_PERMISSIONS: readonly Permission[] = [
+  'appointment.read',
+  'patient.read',
+  'payment.read',
+  'finance.reports.read',
+];
+
 /** Masquage d'interface uniquement : le serveur vérifie chaque permission. */
 export function can(me: MeResponse | null | undefined, permission: Permission): boolean {
   return me?.permissions.includes(permission) ?? false;

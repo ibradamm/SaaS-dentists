@@ -1,6 +1,6 @@
 import {
   MAX_JOURNAL_PAYMENTS,
-  MAX_REVENUE_DAYS,
+  periodError,
   formatCents,
   type PaymentsJournalResponse,
 } from '@dental/shared';
@@ -13,8 +13,6 @@ import { useNow } from '../../lib/hooks';
 import { REVENUE_KEY, useClinic } from '../../lib/queries';
 import { PAYMENT_METHOD_LABELS } from './labels';
 
-const LOCAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
 /** Périodes proposées, en dates locales du cabinet. */
 export function periodPresets(today: string) {
   const monthStart = `${today.slice(0, 8)}01`;
@@ -25,14 +23,6 @@ export function periodPresets(today: string) {
     { label: 'Ce mois-ci', from: monthStart, to: today },
     { label: 'Mois précédent', from: `${previousEnd.slice(0, 8)}01`, to: previousEnd },
   ];
-}
-
-/** Erreur de période, ou null si la période est valide. */
-export function periodError(from: string, to: string): string | null {
-  if (!LOCAL_DATE.test(from) || !LOCAL_DATE.test(to)) return 'Choisissez deux dates.';
-  if (from > to) return 'La date de début doit précéder la date de fin.';
-  if (addDays(from, MAX_REVENUE_DAYS - 1) < to) return 'Période limitée à une année.';
-  return null;
 }
 
 /**

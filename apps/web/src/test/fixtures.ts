@@ -3,6 +3,7 @@ import type {
   AppointmentType,
   AvailabilityResponse,
   ClinicResponse,
+  DashboardResponse,
   PatientDetail,
   Practitioner,
 } from '@dental/shared';
@@ -115,5 +116,113 @@ export function availability(practitionerIds: string[]): AvailabilityResponse {
       available: working,
     })),
     blocks: [],
+  };
+}
+
+/**
+ * Réponse du tableau de bord pour septembre 2026 (ou la période donnée), sections selon le
+ * rôle comme le fait le serveur : pas de revenus pour la secrétaire.
+ */
+export function dashboard(
+  role: 'ADMIN' | 'DENTIST' | 'SECRETARY',
+  period: { from: string; to: string } = { from: '2026-09-01', to: '2026-09-30' },
+): DashboardResponse {
+  const starts = ['2026-09-01', '2026-09-02', '2026-09-03'];
+  return {
+    from: period.from,
+    to: period.to,
+    previous: { from: '2026-08-01', to: '2026-08-31' },
+    granularity: 'day',
+    timezone: 'Europe/Paris',
+    currency: 'EUR',
+    practitionerId: null,
+    activity: {
+      total: 9,
+      scheduled: 2,
+      completed: 6,
+      noShow: 1,
+      cancelled: 1,
+      noShowRate: 1 / 7,
+      cancellationRate: 0.1,
+      patientsSeen: 4,
+      previousCompleted: 3,
+      upcomingNext7Days: 5,
+      occupancy: { bookedMinutes: 195, openMinutes: 4740, rate: 195 / 4740 },
+      byPractitioner: [
+        {
+          practitionerId: IDS.alpha,
+          displayName: 'Dr Alpha',
+          color: '#0ea5e9',
+          total: 6,
+          completed: 4,
+          noShow: 1,
+          cancelled: 1,
+          bookedMinutes: 105,
+          openMinutes: 3780,
+          rate: 105 / 3780,
+        },
+        {
+          practitionerId: IDS.bravo,
+          displayName: 'Dr Bravo',
+          color: '#10b981',
+          total: 0,
+          completed: 0,
+          noShow: 0,
+          cancelled: 0,
+          bookedMinutes: 0,
+          openMinutes: 0,
+          rate: null,
+        },
+      ],
+      series: starts.map((start, i) => ({
+        start,
+        scheduled: 0,
+        completed: i + 1,
+        noShow: i === 1 ? 1 : 0,
+        cancelled: 0,
+      })),
+      topTypes: [
+        {
+          appointmentTypeId: IDS.consult,
+          name: 'Consultation',
+          color: '#10b981',
+          count: 6,
+          share: 6 / 9,
+        },
+      ],
+    },
+    patients: { active: 5, new: 2, previousNew: 1 },
+    receivables: { totalRemainingCents: 3000, patients: 1 },
+    unbilled: {
+      count: 1,
+      items: [
+        {
+          appointmentId: '01a0de00-0000-7000-8000-00000000f001',
+          startAt: '2026-09-07T11:00:00.000Z',
+          practitionerId: IDS.alpha,
+          patient: { id: IDS.patient, lastName: 'Dupont', firstName: 'Léa' },
+          appointmentTypeName: 'Consultation',
+        },
+      ],
+    },
+    ...(role === 'SECRETARY'
+      ? {}
+      : {
+          revenue: {
+            totalCents: 11000,
+            count: 3,
+            previousTotalCents: 10000,
+            voided: { amountCents: 1000, count: 1 },
+            series: starts.map((start, i) => ({
+              start,
+              amountCents: [2000, 0, 9000][i]!,
+              count: i === 1 ? 0 : 1,
+            })),
+            byPractitioner: [
+              { practitionerId: IDS.alpha, displayName: 'Dr Alpha', amountCents: 6000, count: 1 },
+              { practitionerId: null, displayName: null, amountCents: 5000, count: 2 },
+            ],
+          },
+        }),
   };
 }
