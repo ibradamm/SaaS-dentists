@@ -24,6 +24,7 @@ export function AppointmentDetails({
   types,
   timeZone,
   canWrite,
+  canCharge,
   onSaved,
 }: {
   id: string;
@@ -31,6 +32,8 @@ export function AppointmentDetails({
   types: AppointmentType[];
   timeZone: string;
   canWrite: boolean;
+  /** Saisie d'un acte à encaisser pour ce rendez-vous (`payment.write`, vérifiée par le serveur). */
+  canCharge: boolean;
   onSaved: (appointment: Appointment) => void;
 }) {
   const queryClient = useQueryClient();
@@ -195,6 +198,16 @@ export function AppointmentDetails({
               </Button>
             );
           })}
+        </div>
+      )}
+      {canCharge && a.status !== 'CANCELLED' && (
+        <div>
+          <Link
+            className="inline-flex min-h-11 items-center rounded-md bg-white px-4 text-sm font-medium text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700"
+            to={`/patients/${a.patient.id}?encaisser=${a.id}#paiements`}
+          >
+            Encaisser
+          </Link>
         </div>
       )}
       {canWrite && a.status === 'SCHEDULED' && !started && (

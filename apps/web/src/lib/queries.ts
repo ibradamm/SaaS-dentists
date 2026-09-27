@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { api } from './api';
 
 /*
@@ -21,3 +21,25 @@ export const useAllAppointmentTypes = () =>
     queryKey: [...APPOINTMENT_TYPES_KEY, 'all'],
     queryFn: () => api.listAppointmentTypes(true),
   });
+
+/** Compte d'un patient (montants dus, paiements, restant dû). */
+export const patientAccountKey = (patientId: string) => ['patient-account', patientId] as const;
+export const RECEIVABLES_KEY = ['receivables'] as const;
+/** Revenus et journal des encaissements, toutes périodes. */
+export const REVENUE_KEY = ['revenue'] as const;
+
+export const usePatientAccount = (patientId: string, enabled = true) =>
+  useQuery({
+    queryKey: patientAccountKey(patientId),
+    queryFn: () => api.patientAccount(patientId),
+    enabled,
+  });
+
+/** Après toute écriture financière : compte du patient, restes à encaisser et revenus. */
+export async function refreshFinance(queryClient: QueryClient, patientId: string) {
+  await Promise.all(
+    [patientAccountKey(patientId), RECEIVABLES_KEY, REVENUE_KEY].map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey }),
+    ),
+  );
+}

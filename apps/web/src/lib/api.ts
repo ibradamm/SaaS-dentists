@@ -1,4 +1,12 @@
 import {
+  chargeSchema,
+  patientAccountSchema,
+  paymentResultSchema,
+  paymentsJournalResponseSchema,
+  receivablesResponseSchema,
+  revenueResponseSchema,
+  type CreateChargeRequest,
+  type RecordPaymentRequest,
   appointmentSchema,
   blockWriteResponseSchema,
   listAppointmentsResponseSchema,
@@ -260,6 +268,23 @@ export const api = {
     ),
   slots: (query: { practitionerId: string; from: string; to: string; durationMinutes: number }) =>
     request('GET', `/api/availability/slots?${toQuery(query)}`, slotsResponseSchema),
+
+  patientAccount: (patientId: string) =>
+    request('GET', `/api/patients/${patientId}/account`, patientAccountSchema),
+  createCharge: (body: CreateChargeRequest) => request('POST', '/api/charges', chargeSchema, body),
+  cancelCharge: (id: string, reason: string) =>
+    request('POST', `/api/charges/${id}/cancel`, chargeSchema, { reason }),
+  recordPayment: (body: RecordPaymentRequest) =>
+    request('POST', '/api/payments', paymentResultSchema, body),
+  voidPayment: (id: string, reason: string) =>
+    request('POST', `/api/payments/${id}/void`, paymentResultSchema, { reason }),
+  receivables: () => request('GET', '/api/receivables', receivablesResponseSchema),
+  revenue: (query: { from: string; to: string }) =>
+    request('GET', `/api/finance/revenue?${toQuery(query)}`, revenueResponseSchema),
+  paymentsJournal: (query: { from: string; to: string }) =>
+    request('GET', `/api/finance/payments?${toQuery(query)}`, paymentsJournalResponseSchema).then(
+      (r) => r.payments,
+    ),
 
   listPatients: (query: {
     q?: string;

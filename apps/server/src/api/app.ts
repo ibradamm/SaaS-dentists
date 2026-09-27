@@ -10,6 +10,7 @@ import type { ClinicService } from '../modules/clinic/clinic.service';
 import type { ImportsService } from '../modules/imports/imports.service';
 import type { PatientsService } from '../modules/patients/patients.service';
 import type { AppointmentsService } from '../modules/appointments/appointments.service';
+import type { FinanceService } from '../modules/finance/finance.service';
 import type { PractitionersService } from '../modules/scheduling/practitioners.service';
 import type { SchedulesService } from '../modules/scheduling/schedules.service';
 import type { UsersService } from '../modules/users/users.service';
@@ -20,6 +21,7 @@ import { clinicRoutes } from './routes/clinic';
 import { healthRoutes } from './routes/health';
 import { importsRoutes } from './routes/imports';
 import { appointmentsRoutes } from './routes/appointments';
+import { financeRoutes } from './routes/finance';
 import { schedulingRoutes } from './routes/scheduling';
 import { patientsRoutes } from './routes/patients';
 import { usersRoutes } from './routes/users';
@@ -48,6 +50,7 @@ export interface AppDependencies {
   practitioners: PractitionersService;
   schedules: SchedulesService;
   appointments: AppointmentsService;
+  finance: FinanceService;
   webOrigin: string;
   secureCookies: boolean;
   rateLimits?: RateLimits;
@@ -93,6 +96,7 @@ export async function buildApp(deps: AppDependencies): Promise<FastifyInstance> 
   importsRoutes(app, { imports: deps.imports });
   schedulingRoutes(app, { practitioners: deps.practitioners, schedules: deps.schedules });
   appointmentsRoutes(app, { appointments: deps.appointments });
+  financeRoutes(app, { finance: deps.finance });
 
   return app;
 }

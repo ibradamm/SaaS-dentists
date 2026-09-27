@@ -9,10 +9,11 @@ import { APPOINTMENT_STATUS_LABELS, STATUS_TONES } from '../agenda/labels';
 import { useAllPractitioners, useClinic } from '../../lib/queries';
 
 /** Rendez-vous d'un patient (historique complet, du plus récent au plus ancien). */
-export const usePatientAppointments = (patientId: string) =>
+export const usePatientAppointments = (patientId: string, enabled = true) =>
   useQuery({
     queryKey: ['patient-appointments', patientId],
     queryFn: () => api.patientAppointments(patientId),
+    enabled,
   });
 
 /** Rendez-vous « prévus » non terminés, du plus proche au plus lointain. */

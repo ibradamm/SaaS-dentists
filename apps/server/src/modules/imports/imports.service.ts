@@ -13,12 +13,14 @@ import { v7 as uuidv7 } from 'uuid';
 import type { Database, Transaction } from '../../db/client';
 import {
   appointments,
+  charges,
   clinics,
   importBatches,
   importRows,
   patientContacts,
   patientMedicalNotes,
   patients,
+  payments,
   type ImportBatch,
 } from '../../db/schema';
 import { withTenant } from '../../db/tenant';
@@ -553,6 +555,19 @@ export function createImportsService(deps: { db: Database; now?: () => Date }) {
                 .select({ one: sql`1` })
                 .from(appointments)
                 .where(eq(appointments.patientId, patients.id)),
+            ),
+            // Ni un patient qui a un montant dû ou un paiement, même annulé (ADR 0009).
+            notExists(
+              tx
+                .select({ one: sql`1` })
+                .from(charges)
+                .where(eq(charges.patientId, patients.id)),
+            ),
+            notExists(
+              tx
+                .select({ one: sql`1` })
+                .from(payments)
+                .where(eq(payments.patientId, patients.id)),
             ),
           ),
         )

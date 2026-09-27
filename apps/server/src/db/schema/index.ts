@@ -7,3 +7,4 @@ export * from './imports';
 export * from './patients';
 export * from './scheduling';
 export * from './appointments';
+export * from './finance';

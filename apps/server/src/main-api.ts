@@ -12,6 +12,7 @@ import { createPatientsService } from './modules/patients/patients.service';
 import { createPractitionersService } from './modules/scheduling/practitioners.service';
 import { createSchedulesService } from './modules/scheduling/schedules.service';
 import { createAppointmentsService } from './modules/appointments/appointments.service';
+import { createFinanceService } from './modules/finance/finance.service';
 import { createUsersService } from './modules/users/users.service';
 
 const config = loadApiConfig();
@@ -42,6 +43,7 @@ try {
     practitioners: createPractitionersService({ db }),
     schedules: createSchedulesService({ db }),
     appointments: createAppointmentsService({ db }),
+    finance: createFinanceService({ db }),
     webOrigin: config.WEB_ORIGIN,
     secureCookies: config.SECURE_COOKIES,
   });

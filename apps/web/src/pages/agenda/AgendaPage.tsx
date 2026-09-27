@@ -360,6 +360,7 @@ export function AgendaPage() {
                 types={types.data}
                 timeZone={timeZone}
                 canWrite={canWrite}
+                canCharge={can(me, 'payment.write')}
                 onSaved={(a) => void onSaved(a, 'Rendez-vous modifié.')}
               />
             ) : canWrite ? (

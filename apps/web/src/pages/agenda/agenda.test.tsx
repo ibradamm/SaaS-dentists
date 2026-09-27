@@ -3,6 +3,7 @@ import type {
   AppointmentType,
   AvailabilityResponse,
   PatientDetail,
+  Permission,
   Practitioner,
   Role,
 } from '@dental/shared';
@@ -159,12 +160,10 @@ type Handlers = Parameters<typeof mockApi>[0];
 function setup(
   role: Role,
   extra: Handlers = {},
-  options: { timezone?: string; withoutWrite?: boolean } = {},
+  options: { timezone?: string; without?: Permission[] } = {},
 ) {
   const session = me(role);
-  if (options.withoutWrite) {
-    session.permissions = session.permissions.filter((p) => p !== 'appointment.write');
-  }
+  session.permissions = session.permissions.filter((p) => !options.without?.includes(p));
   return mockApi({
     'GET /api/auth/me': () => ({ status: 200, body: session }),
     'GET /api/clinic': () => ({ status: 200, body: clinic(options.timezone) }),
@@ -549,7 +548,7 @@ describe('agenda', () => {
   });
 
   it('sans droit d’écriture : consultation seule (le serveur refuse de toute façon)', async () => {
-    setup('SECRETARY', {}, { withoutWrite: true });
+    setup('SECRETARY', {}, { without: ['appointment.write'] });
     renderApp('/agenda');
     fireEvent.click(await screen.findByRole('button', { name: /Dr Alpha, 09:00/ }));
     const details = await panel('Rendez-vous');
@@ -557,6 +556,26 @@ describe('agenda', () => {
     expect(screen.queryByRole('button', { name: 'Nouveau rendez-vous' })).toBeNull();
     expect(within(details).queryByRole('button', { name: 'Marquer honoré' })).toBeNull();
     expect(within(details).queryByRole('button', { name: 'Modifier ou déplacer' })).toBeNull();
+  });
+
+  it('« Encaisser » : lien vers le compte du patient, formulaire ouvert sur ce rendez-vous', async () => {
+    setup('SECRETARY');
+    renderApp('/agenda');
+    fireEvent.click(await screen.findByRole('button', { name: /Dr Alpha, 09:00/ }));
+    const details = await panel('Rendez-vous');
+    expect(await within(details).findByRole('link', { name: 'Encaisser' })).toHaveAttribute(
+      'href',
+      `/patients/${PATIENT}?encaisser=${RDV_PAST}#paiements`,
+    );
+  });
+
+  it('sans droit de saisie des paiements : pas de lien « Encaisser »', async () => {
+    setup('SECRETARY', {}, { without: ['payment.write'] });
+    renderApp('/agenda');
+    fireEvent.click(await screen.findByRole('button', { name: /Dr Alpha, 09:00/ }));
+    const details = await panel('Rendez-vous');
+    await within(details).findByText('Consultation');
+    expect(within(details).queryByRole('link', { name: 'Encaisser' })).toBeNull();
   });
 
   it('appel d’un nouveau patient : fiche créée dans le formulaire, doublon proposé d’abord', async () => {

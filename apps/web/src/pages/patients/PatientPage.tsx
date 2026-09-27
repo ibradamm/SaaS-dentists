@@ -15,6 +15,7 @@ import { ApiError, api, errorMessage } from '../../lib/api';
 import { can, useMe } from '../../lib/auth';
 import { formatDate, formatDateTime } from '../../lib/format-date';
 import { formatPhone } from '../../lib/format';
+import { PatientAccount } from '../finance/PatientAccount';
 import { RELATIONSHIP_LABELS } from './labels';
 import { PatientAppointments } from './PatientAppointments';
 import { PatientSummary } from './PatientSummary';
@@ -371,12 +372,17 @@ export function PatientPage() {
         </div>
       </div>
       {toggleArchive.isError && <Alert>{errorMessage(toggleArchive.error)}</Alert>}
-      <PatientSummary patient={p} readsAgenda={can(me, 'appointment.read')} />
+      <PatientSummary
+        patient={p}
+        readsAgenda={can(me, 'appointment.read')}
+        readsPayments={can(me, 'payment.read')}
+      />
       {/* Pour qui soigne, les notes médicales passent avant l'administratif (ADR 0008). */}
       {can(me, 'patient.medical.read') && (
         <MedicalNotesSection patientId={p.id} canWrite={can(me, 'patient.medical.write')} />
       )}
       {can(me, 'appointment.read') && <PatientAppointments patientId={p.id} />}
+      {can(me, 'payment.read') && <PatientAccount patient={p} />}
       <IdentitySection key={`${p.id}-${p.version}`} patient={p} editable={editable} />
       <ContactsSection patient={p} editable={editable} />
     </section>

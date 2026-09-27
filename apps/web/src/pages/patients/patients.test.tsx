@@ -61,7 +61,8 @@ const CLINIC = {
   email: null,
 };
 
-// Session, plus ce que la section « Rendez-vous » de la fiche charge (aucun rendez-vous).
+// Session, plus ce que les sections « Rendez-vous » et « Paiements » de la fiche chargent
+// (aucun rendez-vous, aucun acte).
 const session = (role: Role, appointments: Appointment[] = []) => ({
   'GET /api/auth/me': () => ({ status: 200, body: me(role) }),
   'GET /api/clinic': () => ({ status: 200, body: CLINIC }),
@@ -69,6 +70,10 @@ const session = (role: Role, appointments: Appointment[] = []) => ({
   [`GET /api/patients/${PATIENT_ID}/appointments`]: () => ({
     status: 200,
     body: { appointments },
+  }),
+  [`GET /api/patients/${PATIENT_ID}/account`]: () => ({
+    status: 200,
+    body: { currency: 'EUR', dueCents: 0, paidCents: 0, remainingCents: 0, charges: [] },
   }),
 });
 
@@ -448,6 +453,7 @@ describe('rendez-vous du patient', () => {
     expect(order()).toEqual([
       'Notes médicales',
       'Rendez-vous',
+      'Paiements',
       'Identité et coordonnées',
       'Téléphones',
     ]);

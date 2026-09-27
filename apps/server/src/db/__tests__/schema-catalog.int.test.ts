@@ -38,6 +38,8 @@ describe('catalogue du schéma', () => {
         'availability_blocks',
         'appointment_statuses',
         'appointments',
+        'charges',
+        'payments',
       ]),
     );
     const unprotected = rows
@@ -86,8 +88,10 @@ describe('catalogue du schéma', () => {
       ORDER BY 1`);
     expect(rows).toEqual([
       { table: 'appointments', on_delete: 'r' }, // bloque : exclu de l'annulation
+      { table: 'charges', on_delete: 'r' }, // bloque : exclu de l'annulation
       { table: 'patient_contacts', on_delete: 'c' }, // suppression en cascade
       { table: 'patient_medical_notes', on_delete: 'r' }, // bloque : exclu de l'annulation
+      { table: 'payments', on_delete: 'r' }, // bloque : exclu de l'annulation
     ]);
   });
 

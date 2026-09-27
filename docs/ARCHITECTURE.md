@@ -91,7 +91,7 @@ Règles :
 | Import | `GET/POST /api/imports`, lignes, rapport, validation, annulation, abandon | Fait |
 | Praticiens et disponibilités | `GET/POST /api/practitioners`, `PATCH /:id`, archivage ; `GET/POST /api/appointment-types`, `PATCH /:id`, archivage ; `GET/PUT /api/practitioners/:id/schedules`, `DELETE …/schedules/:periodId` ; `GET/POST /api/availability-blocks`, `PUT/DELETE /:id` ; `GET /api/availability?from&to&practitionerId` | Fait (ADR 0006) |
 | Rendez-vous | `GET /api/appointments?from&to&practitionerId&includeCancelled`, `GET /api/appointments/:id`, `POST /api/appointments` (confirmation explicite `allowOutsideAvailability`), `PATCH /:id` (déplacement, version), `POST /:id/status` (honoré, patient absent, annulé, correction) ; `GET /api/patients/:id/appointments` ; `GET /api/availability/slots` ; conflits renvoyés par les écritures d'horaires et d'indisponibilités | Fait (ADR 0007) |
-| Finances | actes à encaisser, paiements, annulation de paiement, synthèses par période | Phase 7 |
+| Finances | `GET /api/patients/:id/account` ; `POST /api/charges` (clé d'idempotence, paiement immédiat facultatif), `POST /api/charges/:id/cancel` ; `POST /api/payments` (clé d'idempotence), `POST /api/payments/:id/void` ; `GET /api/receivables` ; `GET /api/finance/revenue?from&to`, `GET /api/finance/payments?from&to` | Fait (ADR 0009) |
 | Tableau de bord et statistiques | indicateurs du jour, séries temporelles | Phase 8 |
 | Audit | `GET /api/audit-logs` (filtres, pagination) | Phase 9 |
 
@@ -178,9 +178,10 @@ docs/            ARCHITECTURE.md, adr/, phases/, future/
 | `availability_blocks` | Absences et créneaux bloqués, d'un praticien ou de tout le cabinet, en instants UTC | Fait |
 | `appointment_statuses` | Statuts (prévu, honoré, patient absent, annulé) et leur effet sur le créneau (`occupies_slot`) ; commune à tous les cabinets, lecture seule pour l'application | Fait |
 | `appointments` | Rendez-vous : praticien, patient, type, début et fin (grille de 5 min, 5 à 480 min), statut, note administrative, motif d'annulation, version ; jamais supprimés | Fait |
-| `charges` | Montants dus (acte ou rendez-vous) | Phase 7 |
-| `payments` | Paiements non modifiables : une erreur s'annule et se ressaisit | Phase 7 |
-| `expenses` | Dépenses (option désactivée par défaut) | Phase 7 |
+| `charges` | Montants dus (« actes à encaisser ») : patient, rendez-vous et praticien facultatifs, libellé, montant en centimes, devise, ouvert ou annulé (motif, date, auteur), clé d'idempotence ; jamais modifiés ni supprimés | Fait |
+| `payments` | Encaissements rattachés à un montant dû : montant en centimes, moyen, référence, instant d'enregistrement fixé par le serveur, encaissé ou annulé (motif, date, auteur), clé d'idempotence ; jamais modifiés ni supprimés | Fait |
+
+**Garanties financières (migration 0014, ADR 0009)** : droits par colonne (seules les colonnes d'annulation sont modifiables, aucun `DELETE`), déclencheurs qui n'autorisent que `OPEN → CANCELLED` et `RECORDED → VOIDED`, et un déclencheur qui verrouille le montant dû (`FOR UPDATE`) avant de vérifier que la somme des paiements valides ne dépasse pas le dû. Les dépenses ne sont pas suivies au MVP (question 4).
 
 **Contraintes anti double réservation (migration 0012)** : `EXCLUDE USING gist (practitioner_id WITH =, tstzrange(start_at, end_at, '[)') WITH &&) WHERE (occupies_slot)`, et la même sur `patient_id`. `occupies_slot` est recalculée depuis le statut par un déclencheur et n'est pas modifiable par l'application : ajouter un statut ne demande qu'une ligne dans `appointment_statuses`. Tests de concurrence réels (service et HTTP) : ADR 0007 et rapport de la Phase 5.
 
@@ -260,8 +261,8 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | 3 | Patients : dossier administratif, contacts, notes médicales restreintes, recherche, doublons, **import CSV / Excel** | 7 | Fait |
 | 4 | Cabinet et disponibilités : profil du cabinet, praticiens (un ou plusieurs), types de rendez-vous, horaires hebdomadaires datés, absences et blocages, calcul des disponibilités (pas de table d'horaires d'ouverture, ADR 0006) | 5, 10, 11 | Fait |
 | 5 | Rendez-vous et agenda : création, déplacement, annulation, statuts, anti double réservation, vues jour et semaine, historique patient (ADR 0007) | 8, 9 | Fait |
-| 6 | Applications web dentiste et secrétaire : parcours quotidiens par rôle, ergonomie, accessibilité, téléphone et tablette (ADR 0008) | 12, 13 | Fait (en attente de validation) |
-| 7 | Paiements et revenus encaissés : actes à encaisser, paiements, annulations, impayés, périodes | 14 | À faire |
+| 6 | Applications web dentiste et secrétaire : parcours quotidiens par rôle, ergonomie, accessibilité, téléphone et tablette (ADR 0008) | 12, 13 | Fait |
+| 7 | Paiements et revenus encaissés : actes à encaisser, paiements partiels, restant dû, annulations motivées, « À encaisser », revenus par période (ADR 0009) | 14 | Fait (en attente de validation) |
 | 8 | Tableau de bord et statistiques | 15, 16 | À faire |
 | 9 | Journal d'audit consultable et audit de sécurité : revue OWASP ASVS, purges, rétention, procédure d'effacement | 17, 18 | À faire |
 | 10 | Tests complets : E2E Playwright en CI, charge, restauration | 19 | À faire |
@@ -282,6 +283,7 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | Risque | Parade |
 |---|---|
 | Double réservation (deux secrétaires en même temps) | Contraintes d'exclusion et verrou par praticien ; tests de concurrence (service, HTTP) et tests par mutation (Phase 5) |
+| Double encaissement ou encaissement supérieur au dû (double clic, réseau, deux postes) | Clé d'idempotence par saisie ; verrou du montant dû et contrôle de la somme en base ; tests de concurrence (base, service, HTTP, navigateur) et tests par mutation (Phase 7) |
 | Erreurs de fuseau ou de changement d'heure | UTC en base, Luxon, tests sur les dates de changement d'heure |
 | Import de mauvaise qualité (colonnes mal associées) | Aperçu avant validation, rapport ligne par ligne, annulation d'un import non modifié |
 | Perte de données | Restauration à un instant donné, sauvegardes hors site, tests de restauration |
@@ -303,8 +305,8 @@ Seul l'hébergement est à prévoir, pour environ 30 à 150 € par mois selon l
 | # | Question | Bloque | Réponse par défaut |
 |---|---|---|---|
 | 1 | Pays des premiers cabinets clients ? | Phase 11 (production) | Aucune : hébergement, conservation et obligations en dépendent |
-| 3 | Chiffre d'affaires = sommes encaissées ou montants facturés ? | Phase 7 | Encaissements, libellés « revenus encaissés » |
-| 4 | Suivre les dépenses ? | Phase 7 | Non (option désactivée) |
+
+Questions 3 et 4 (chiffre d'affaires, dépenses), réponse du 2026-09-27 : le chiffre d'affaires correspond aux sommes réellement encaissées ; le montant dû se distingue du montant payé ; paiements partiels et restant dû visibles ; pas de dépenses au MVP (ADR 0009).
 
 Question 2 (praticiens, fauteuils), réponse du 2026-09-26 : un ou plusieurs praticiens par cabinet ; pas de fauteuils ni de salles au MVP, modèle extensible (ADR 0006, section 8).
 

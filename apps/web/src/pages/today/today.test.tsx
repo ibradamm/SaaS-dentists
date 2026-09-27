@@ -160,9 +160,21 @@ describe('navigation', () => {
       .map((l) => l.textContent);
 
   it.each<[Role, string[]]>([
-    ['SECRETARY', ["Aujourd'hui", 'Agenda', 'Patients', 'Disponibilités']],
-    ['DENTIST', ["Aujourd'hui", 'Agenda', 'Patients', 'Disponibilités']],
-    ['ADMIN', ["Aujourd'hui", 'Agenda', 'Patients', 'Disponibilités', 'Cabinet', 'Utilisateurs']],
+    ['SECRETARY', ["Aujourd'hui", 'Agenda', 'Patients', 'À encaisser', 'Disponibilités']],
+    ['DENTIST', ["Aujourd'hui", 'Agenda', 'Patients', 'À encaisser', 'Revenus', 'Disponibilités']],
+    [
+      'ADMIN',
+      [
+        "Aujourd'hui",
+        'Agenda',
+        'Patients',
+        'À encaisser',
+        'Revenus',
+        'Disponibilités',
+        'Cabinet',
+        'Utilisateurs',
+      ],
+    ],
   ])('%s : menu selon les permissions', async (role, expected) => {
     setup(me(role));
     renderApp('/');

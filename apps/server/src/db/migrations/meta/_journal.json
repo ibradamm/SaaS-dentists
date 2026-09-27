@@ -92,6 +92,20 @@
       "when": 1790460962092,
       "tag": "0012_appointments_security",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790518374990,
+      "tag": "0013_finance_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790518394097,
+      "tag": "0014_finance_security",
+      "breakpoints": true
     }
   ]
 }

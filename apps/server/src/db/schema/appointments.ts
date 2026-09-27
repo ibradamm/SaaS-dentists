@@ -9,6 +9,7 @@ import {
   smallint,
   text,
   timestamp,
+  unique,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { clinicIdColumn, createdAt, primaryId, updatedAt } from './_columns';
@@ -78,6 +79,8 @@ export const appointments = pgTable(
       columns: [t.clinicId, t.appointmentTypeId],
       foreignColumns: [appointmentTypes.clinicId, appointmentTypes.id],
     }),
+    // Cible de la clé composite des montants dus : le rendez-vous est celui du même patient.
+    unique('appointments_clinic_id_patient_key').on(t.clinicId, t.id, t.patientId),
     index('appointments_clinic_start_idx').on(t.clinicId, t.startAt),
     index('appointments_practitioner_start_idx').on(t.practitionerId, t.startAt),
     index('appointments_patient_start_idx').on(t.patientId, t.startAt),

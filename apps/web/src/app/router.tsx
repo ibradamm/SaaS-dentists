@@ -112,6 +112,32 @@ export const routes: RouteObject[] = [
             ],
           },
           {
+            element: <RequirePermission permission="payment.read" />,
+            children: [
+              {
+                path: '/encaissements',
+                ...page('À encaisser', () =>
+                  import('../pages/finance/ReceivablesPage').then((m) => ({
+                    Component: m.ReceivablesPage,
+                  })),
+                ),
+              },
+            ],
+          },
+          {
+            element: <RequirePermission permission="finance.reports.read" />,
+            children: [
+              {
+                path: '/revenus',
+                ...page('Revenus', () =>
+                  import('../pages/finance/RevenuePage').then((m) => ({
+                    Component: m.RevenuePage,
+                  })),
+                ),
+              },
+            ],
+          },
+          {
             element: <RequirePermission permission="clinic.settings.manage" />,
             children: [
               {

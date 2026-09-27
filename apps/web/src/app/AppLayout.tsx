@@ -18,6 +18,8 @@ const NAV: { to: string; label: string; permission: Permission | null; end?: boo
   { to: '/', label: "Aujourd'hui", permission: null, end: true },
   { to: '/agenda', label: 'Agenda', permission: 'appointment.read' },
   { to: '/patients', label: 'Patients', permission: 'patient.read' },
+  { to: '/encaissements', label: 'À encaisser', permission: 'payment.read' },
+  { to: '/revenus', label: 'Revenus', permission: 'finance.reports.read' },
   { to: '/disponibilites', label: 'Disponibilités', permission: 'appointment.read' },
   { to: '/cabinet', label: 'Cabinet', permission: 'clinic.settings.manage' },
   { to: '/utilisateurs', label: 'Utilisateurs', permission: 'user.manage' },
