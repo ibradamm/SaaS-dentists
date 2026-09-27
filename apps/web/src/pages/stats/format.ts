@@ -64,6 +64,8 @@ export function formatDuration(minutes: number): string {
 
 const integer = new Intl.NumberFormat('fr-FR');
 export const formatCount = (n: number) => integer.format(n);
+/** « 1 absent », « 35 absents » (pluriel français : à partir de 2). */
+export const plural = (n: number, word: string) => `${formatCount(n)} ${word}${n > 1 ? 's' : ''}`;
 
 /** Variation relative (« +12 % ») ; null si la période précédente est nulle. */
 export function formatChange(current: number, previous: number): string | null {

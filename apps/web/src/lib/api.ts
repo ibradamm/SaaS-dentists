@@ -1,4 +1,5 @@
 import {
+  billingExemptionResponseSchema,
   dashboardResponseSchema,
   chargeSchema,
   patientAccountSchema,
@@ -270,6 +271,10 @@ export const api = {
   slots: (query: { practitionerId: string; from: string; to: string; durationMinutes: number }) =>
     request('GET', `/api/availability/slots?${toQuery(query)}`, slotsResponseSchema),
 
+  setBillingExempt: (appointmentId: string, billingExempt: boolean) =>
+    request('POST', `/api/appointments/${appointmentId}/billing`, billingExemptionResponseSchema, {
+      billingExempt,
+    }),
   patientAccount: (patientId: string) =>
     request('GET', `/api/patients/${patientId}/account`, patientAccountSchema),
   createCharge: (body: CreateChargeRequest) => request('POST', '/api/charges', chargeSchema, body),

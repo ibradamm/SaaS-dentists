@@ -70,6 +70,7 @@ export function appointment(overrides: Partial<Appointment> = {}): Appointment {
     status: 'SCHEDULED',
     note: null,
     cancellationReason: null,
+    billingExempt: false,
     version: 1,
     ...overrides,
   };
@@ -143,6 +144,7 @@ export function dashboard(
       noShow: 1,
       cancelled: 1,
       noShowRate: 1 / 7,
+      presenceRate: 6 / 7,
       cancellationRate: 0.1,
       patientsSeen: 4,
       previousCompleted: 3,
@@ -157,6 +159,7 @@ export function dashboard(
           completed: 4,
           noShow: 1,
           cancelled: 1,
+          presenceRate: 0.8,
           bookedMinutes: 105,
           openMinutes: 3780,
           rate: 105 / 3780,
@@ -169,6 +172,7 @@ export function dashboard(
           completed: 0,
           noShow: 0,
           cancelled: 0,
+          presenceRate: null,
           bookedMinutes: 0,
           openMinutes: 0,
           rate: null,
@@ -195,6 +199,7 @@ export function dashboard(
     receivables: { totalRemainingCents: 3000, patients: 1 },
     unbilled: {
       count: 1,
+      exempt: 2,
       items: [
         {
           appointmentId: '01a0de00-0000-7000-8000-00000000f001',

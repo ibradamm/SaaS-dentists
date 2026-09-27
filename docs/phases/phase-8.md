@@ -2,6 +2,13 @@
 
 Date : 2026-09-27. Statut : **code et tests locaux terminés** ; résultat de la CI GitHub consigné dans le résumé de fin de phase. En attente de validation avant la Phase 9.
 
+> **Mise à jour après validation (2026-09-27).**
+> - L'occupation compte désormais les patients absents : c'est l'« occupation du planning ».
+> - Le taux de présence s'affiche à côté du taux d'absence.
+> - Les rendez-vous marqués « sans facturation » ne sont plus des oublis d'encaissement.
+>
+> Voir l'ADR 0010, section 10, et le rapport de la Phase 9. Les chiffres ci-dessous sont ceux de la version validée.
+
 ## Réponses du porteur du projet (validation de la Phase 7)
 
 | # | Réponse | Où c'est consigné et comment c'est tenu |

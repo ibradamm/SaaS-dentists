@@ -103,6 +103,7 @@ const conflict: Appointment = {
   status: 'SCHEDULED',
   note: null,
   cancellationReason: null,
+  billingExempt: false,
   version: 1,
 };
 

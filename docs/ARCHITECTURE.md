@@ -177,7 +177,7 @@ docs/            ARCHITECTURE.md, adr/, phases/, future/
 | `working_schedules`, `working_intervals` | Périodes d'horaires datées par praticien, plages hebdomadaires en heure locale ; chevauchements refusés par contraintes d'exclusion | Fait |
 | `availability_blocks` | Absences et créneaux bloqués, d'un praticien ou de tout le cabinet, en instants UTC | Fait |
 | `appointment_statuses` | Statuts (prévu, honoré, patient absent, annulé) et leur effet sur le créneau (`occupies_slot`) ; commune à tous les cabinets, lecture seule pour l'application | Fait |
-| `appointments` | Rendez-vous : praticien, patient, type, début et fin (grille de 5 min, 5 à 480 min), statut, note administrative, motif d'annulation, version ; jamais supprimés | Fait |
+| `appointments` | Rendez-vous : praticien, patient, type, début et fin (grille de 5 min, 5 à 480 min), statut, note administrative, motif d'annulation, mention « sans facturation » (rendez-vous gratuit, ADR 0010), version ; jamais supprimés | Fait |
 | `charges` | Montants dus (« actes à encaisser ») : patient, rendez-vous et praticien facultatifs, libellé, montant en centimes, devise, ouvert ou annulé (motif, date, auteur), clé d'idempotence ; jamais modifiés ni supprimés | Fait |
 | `payments` | Encaissements rattachés à un montant dû : montant en centimes, moyen, référence, instant d'enregistrement fixé par le serveur, encaissé ou annulé (motif, date, auteur), clé d'idempotence ; jamais modifiés ni supprimés | Fait |
 

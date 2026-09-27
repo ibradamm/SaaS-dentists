@@ -8,14 +8,15 @@ import {
   type Period,
   type PeriodKind,
 } from '@dental/shared';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Alert, Loading, SelectField, TextField } from '../../components/ui';
-import { errorMessage } from '../../lib/api';
+import { api, errorMessage } from '../../lib/api';
 import { can, useMe } from '../../lib/auth';
 import { formatDayLabel, formatTime, localDateOf, todayIn } from '../../lib/dates';
 import { useNow } from '../../lib/hooks';
-import { useAllPractitioners, useClinic, useDashboard } from '../../lib/queries';
+import { DASHBOARD_KEY, useAllPractitioners, useClinic, useDashboard } from '../../lib/queries';
 import { BarList, ColumnChart, Meter, SERIES, type Bucket } from './charts';
 import {
   bucketLabel,
@@ -24,6 +25,7 @@ import {
   formatDuration,
   formatPeriod,
   formatRate,
+  plural,
   tickLabel,
 } from './format';
 
@@ -248,13 +250,13 @@ function Dashboard({
         )}
         {d.activity && (
           <Tile
-            label="Taux d’occupation"
+            label="Occupation du planning"
             value={formatRate(d.activity.occupancy.rate)}
             detail={`${formatDuration(d.activity.occupancy.bookedMinutes)} réservées sur ${formatDuration(d.activity.occupancy.openMinutes)} ouvertes`}
           >
             <Meter
               rate={d.activity.occupancy.rate}
-              label={`Taux d’occupation : ${formatRate(d.activity.occupancy.rate)}`}
+              label={`Occupation du planning : ${formatRate(d.activity.occupancy.rate)}`}
             />
           </Tile>
         )}
@@ -272,9 +274,9 @@ function Dashboard({
         )}
         {d.activity && (
           <Tile
-            label="Patients absents"
-            value={formatCount(d.activity.noShow)}
-            detail={`Taux d’absence : ${formatRate(d.activity.noShowRate)}`}
+            label="Taux de présence"
+            value={formatRate(d.activity.presenceRate)}
+            detail={`Taux d’absence : ${formatRate(d.activity.noShowRate)} · ${plural(d.activity.completed, 'honoré')}, ${plural(d.activity.noShow, 'absent')}`}
           />
         )}
         {d.activity && (
@@ -352,7 +354,7 @@ function Dashboard({
         )}
         {d.activity && (
           <Card>
-            <h3 className="font-semibold">Occupation par praticien</h3>
+            <h3 className="font-semibold">Occupation du planning par praticien</h3>
             {d.activity.byPractitioner.length === 0 ? (
               <p className="text-sm text-slate-600">Aucun praticien.</p>
             ) : (
@@ -365,8 +367,8 @@ function Dashboard({
                     </div>
                     <Meter rate={p.rate} label={`${p.displayName} : ${formatRate(p.rate)}`} />
                     <span className="text-xs text-slate-600">
-                      {formatCount(p.completed)} honorés · {formatCount(p.noShow)} absents ·{' '}
-                      {formatCount(p.cancelled)} annulés
+                      Présence {formatRate(p.presenceRate)} · {formatCount(p.completed)} honorés ·{' '}
+                      {formatCount(p.noShow)} absents · {formatCount(p.cancelled)} annulés
                       {p.openMinutes === 0 ? ' · aucun horaire sur la période' : ''}
                     </span>
                   </li>
@@ -420,9 +422,15 @@ function Unbilled({
   timeZone: string;
   canCharge: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const exempt = useMutation({
+    mutationFn: (appointmentId: string) => api.setBillingExempt(appointmentId, true),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY }),
+  });
   return (
     <Card>
       <h3 className="font-semibold">Rendez-vous honorés sans acte saisi</h3>
+      {exempt.isError && <Alert>{errorMessage(exempt.error)}</Alert>}
       <p className="text-sm text-slate-600">
         {data.count === 0
           ? 'Tous les rendez-vous honorés de la période ont un acte à encaisser.'
@@ -446,17 +454,42 @@ function Unbilled({
                   {i.patient.firstName} · {i.appointmentTypeName}
                 </span>
                 {canCharge && (
-                  <Link
-                    className="inline-flex min-h-11 items-center underline"
-                    to={`/patients/${i.patient.id}?encaisser=${i.appointmentId}#paiements`}
-                  >
-                    Encaisser
-                  </Link>
+                  <span className="flex flex-wrap gap-x-4">
+                    <Link
+                      className="inline-flex min-h-11 items-center underline"
+                      to={`/patients/${i.patient.id}?encaisser=${i.appointmentId}#paiements`}
+                    >
+                      Encaisser
+                    </Link>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-11 items-center text-slate-700 underline disabled:text-slate-400"
+                      aria-label={`Sans facturation : ${i.patient.lastName.toUpperCase()} ${i.patient.firstName}, ${formatDayLabel(day)}`}
+                      disabled={exempt.isPending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Marquer ce rendez-vous « sans facturation » (rendez-vous gratuit) ? La mention peut être retirée depuis l’agenda.',
+                          )
+                        )
+                          exempt.mutate(i.appointmentId);
+                      }}
+                    >
+                      Sans facturation
+                    </button>
+                  </span>
                 )}
               </li>
             );
           })}
         </ul>
+      )}
+      {data.exempt > 0 && (
+        <p className="text-xs text-slate-600">
+          {formatCount(data.exempt)} rendez-vous honoré{data.exempt > 1 ? 's' : ''} marqué
+          {data.exempt > 1 ? 's' : ''} « sans facturation », non compté{data.exempt > 1 ? 's' : ''}{' '}
+          ici.
+        </p>
       )}
     </Card>
   );

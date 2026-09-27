@@ -545,8 +545,9 @@ function NewChargeForm({
 }) {
   const queryClient = useQueryClient();
   const idempotency = useIdempotencyKey();
-  // Rendez-vous proposés : tous sauf les annulés, du plus récent au plus ancien.
-  const options = appointments.filter((a) => a.status !== 'CANCELLED');
+  // Rendez-vous proposés : tous sauf les annulés et ceux « sans facturation », du plus récent au
+  // plus ancien.
+  const options = appointments.filter((a) => a.status !== 'CANCELLED' && !a.billingExempt);
   const initial = options.find((a) => a.id === initialAppointmentId);
   const [appointmentId, setAppointmentId] = useState(initial?.id ?? '');
   const [practitionerId, setPractitionerId] = useState('');

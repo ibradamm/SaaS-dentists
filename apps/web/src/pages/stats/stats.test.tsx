@@ -29,7 +29,11 @@ const flat = (s: string | null | undefined) => (s ?? '').replace(/\s/g, ' ');
 const alpha = practitioner(IDS.alpha, 'Dr Alpha', IDS.me);
 const bravo = practitioner(IDS.bravo, 'Dr Bravo');
 
-function setup(role: Role, response?: (call: MockCall) => DashboardResponse) {
+function setup(
+  role: Role,
+  response?: (call: MockCall) => DashboardResponse,
+  extra: Parameters<typeof mockApi>[0] = {},
+) {
   return mockApi({
     'GET /api/auth/me': () => ({ status: 200, body: me(role) }),
     'GET /api/clinic': () => ({ status: 200, body: clinic() }),
@@ -40,6 +44,7 @@ function setup(role: Role, response?: (call: MockCall) => DashboardResponse) {
       const period = { from: q.get('from')!, to: q.get('to')! };
       return { status: 200, body: response ? response(call) : dashboard(role, period) };
     },
+    ...extra,
   });
 }
 const dashboardCalls = (calls: MockCall[]) =>
@@ -59,14 +64,18 @@ describe('page « Statistiques »', () => {
       `Période précédente : ${eur(10000)} (+10 %)`,
     );
     expect(tile('Rendez-vous honorés')).toHaveTextContent('6');
-    expect(flat(tile('Taux d’occupation').textContent)).toContain('4,1 %');
-    expect(tile('Taux d’occupation')).toHaveTextContent('3 h 15 réservées sur 79 h ouvertes');
+    expect(flat(tile('Occupation du planning').textContent)).toContain('4,1 %');
+    expect(tile('Occupation du planning')).toHaveTextContent('3 h 15 réservées sur 79 h ouvertes');
     expect(flat(tile('Restant à encaisser').textContent)).toContain(eur(3000));
-    expect(flat(tile('Patients absents').textContent)).toContain('Taux d’absence : 14,3 %');
+    // Présence et absence, distinguées : 6 honorés, 1 absent.
+    expect(flat(tile('Taux de présence').textContent)).toContain('85,7 %');
+    expect(flat(tile('Taux de présence').textContent)).toContain(
+      'Taux d’absence : 14,3 % · 6 honorés, 1 absent',
+    );
     expect(tile('Nouveaux patients')).toHaveTextContent('5 patients actifs');
     // Taux sans donnée : « — », jamais « 0 % ».
     const occupancy = screen.getByRole('heading', {
-      name: 'Occupation par praticien',
+      name: 'Occupation du planning par praticien',
     }).parentElement!;
     expect(within(occupancy).getByText('Dr Bravo').parentElement).toHaveTextContent('—');
     expect(occupancy).toHaveTextContent('aucun horaire sur la période');
@@ -173,6 +182,7 @@ describe('page « Statistiques »', () => {
           cancelled: 0,
           scheduled: 0,
           noShowRate: null,
+          presenceRate: null,
           cancellationRate: null,
           occupancy: { bookedMinutes: 0, openMinutes: 0, rate: null },
           byPractitioner: [],
@@ -187,7 +197,7 @@ describe('page « Statistiques »', () => {
           series: [{ start: '2026-09-01', amountCents: 0, count: 0 }],
           byPractitioner: [],
         },
-        unbilled: { count: 0, items: [] },
+        unbilled: { count: 0, exempt: 0, items: [] },
       };
     });
     renderApp('/statistiques');
@@ -195,11 +205,39 @@ describe('page « Statistiques »', () => {
     expect(await screen.findAllByText('Aucun encaissement sur la période.')).toHaveLength(2);
     // Activité par période et types fréquents.
     expect(screen.getAllByText('Aucun rendez-vous sur la période.')).toHaveLength(2);
-    expect(tile('Taux d’occupation')).toHaveTextContent('—');
-    expect(tile('Patients absents')).toHaveTextContent('Taux d’absence : —');
+    expect(tile('Occupation du planning')).toHaveTextContent('—');
+    expect(tile('Taux de présence')).toHaveTextContent('—Taux d’absence : —');
     expect(
       screen.getByText('Tous les rendez-vous honorés de la période ont un acte à encaisser.'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('rendez-vous sans facturation', () => {
+  it('depuis la liste des oublis : confirmation, puis mention envoyée au serveur', async () => {
+    const target = '01a0de00-0000-7000-8000-00000000f001';
+    const calls = setup('SECRETARY', undefined, {
+      [`POST /api/appointments/${target}/billing`]: () => ({
+        status: 200,
+        body: { appointmentId: target, billingExempt: true },
+      }),
+    });
+    const posts = () => calls.filter((c) => c.method === 'POST');
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderApp('/statistiques');
+    const list = await screen.findByRole('list', { name: 'Rendez-vous honorés sans acte saisi' });
+    // Les rendez-vous déjà marqués sont comptés à part.
+    expect(
+      screen.getByText(/2 rendez-vous honorés marqués « sans facturation », non comptés/),
+    ).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole('button', { name: /^Sans facturation : DUPONT Léa/ }));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(posts()[0]).toMatchObject({
+      url: '/api/appointments/01a0de00-0000-7000-8000-00000000f001/billing',
+      body: { billingExempt: true },
+    });
+    // Le tableau de bord est relu.
+    await waitFor(() => expect(dashboardCalls(calls).length).toBeGreaterThan(1));
   });
 });
 

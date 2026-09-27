@@ -1,4 +1,6 @@
 import {
+  billingExemptionRequestSchema,
+  billingExemptionResponseSchema,
   cancelChargeRequestSchema,
   createChargeRequestSchema,
   recordPaymentRequestSchema,
@@ -27,6 +29,17 @@ const reports = { access: { permission: 'finance.reports.read' } } as const;
  */
 export function financeRoutes(app: FastifyInstance, deps: { finance: FinanceService }) {
   const { finance } = deps;
+
+  app.post('/api/appointments/:id/billing', { config: write }, async (request) =>
+    billingExemptionResponseSchema.parse(
+      await finance.setBillingExempt(
+        actorOf(request),
+        params.parse(request.params).id,
+        billingExemptionRequestSchema.parse(request.body),
+        requestMeta(request),
+      ),
+    ),
+  );
 
   app.get('/api/patients/:id/account', { config: read }, async (request) =>
     patientAccountSchema.parse(

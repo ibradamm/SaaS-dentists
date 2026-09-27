@@ -85,6 +85,8 @@ export const appointmentSchema = z.object({
   status: appointmentStatusSchema,
   note: z.string().nullable(),
   cancellationReason: z.string().nullable(),
+  /** « Sans facturation » : ne compte pas comme oubli d'encaissement (docs/adr/0010). */
+  billingExempt: z.boolean(),
   version: z.number().int(),
 });
 export type Appointment = z.infer<typeof appointmentSchema>;

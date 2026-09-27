@@ -18,6 +18,7 @@ import {
 import { withTenant } from '../../../db/tenant';
 import type { UserActor } from '../../auth/auth.types';
 import { createPractitionersService } from '../../scheduling/practitioners.service';
+import { createFinanceService } from '../../finance/finance.service';
 import { createStatsService } from '../stats.service';
 
 /*
@@ -29,6 +30,7 @@ describe('tableau de bord : calculs sur données réelles', () => {
   const clock = testClock(new Date('2026-09-28T08:00:00Z'));
   const deps = { db: t.appDb, now: clock.now };
   const stats = createStatsService(deps);
+  const finance = createFinanceService(deps);
   const practitionersService = createPractitionersService(deps);
 
   let clinic: Clinic;
@@ -301,7 +303,7 @@ describe('tableau de bord : calculs sur données réelles', () => {
       minutes: 30,
       status: 'SCHEDULED',
     });
-    // 13 h, hors horaires : compté dans l'activité, pas dans l'occupation.
+    // 13 h, hors horaires : compté dans l'activité, pas dans l'occupation du planning.
     await a('a7', {
       practitioner: 'A',
       patient: 'P3',
@@ -477,6 +479,7 @@ describe('tableau de bord : calculs sur données réelles', () => {
       upcomingNext7Days: 1,
     });
     expect(activity.noShowRate).toBeCloseTo(1 / 7, 10);
+    expect(activity.presenceRate).toBeCloseTo(6 / 7, 10);
     expect(activity.cancellationRate).toBeCloseTo(1 / 10, 10);
     expect(activity.topTypes.map((x) => [x.name, x.count])).toEqual([
       ['Consultation', 6],
@@ -499,29 +502,30 @@ describe('tableau de bord : calculs sur données réelles', () => {
     expect(totalFromSeries).toBe(6);
   });
 
-  it('occupation : temps ouvert moins absences, rendez-vous hors horaires exclus, jamais plus de 100 %', async () => {
+  it('occupation du planning : absents comptés, annulés et hors horaires exclus, jamais plus de 100 %', async () => {
     const { activity } = await september();
     const byId = new Map(activity!.byPractitioner.map((p) => [p.practitionerId, p]));
-    // Dr A : 22 jours ouvrés × 180 min − absence du 16 (180) = 3 780 ; réservé : a2 30 + a3 45
-    // + a6 30 = 105 (a1 et a7 hors horaires, a4 absent, a5 annulé).
+    // Dr A : 22 jours ouvrés × 180 min − absence du 16 (180) = 3 780 ; réservé au planning :
+    // a2 30 + a3 45 + a4 30 (absent : le créneau était réservé) + a6 30 = 135. a1 et a7, hors
+    // horaires, ne comptent pas ; a5, annulé, non plus.
     expect(byId.get(ids.A!)).toMatchObject({
       displayName: 'Dr A',
       openMinutes: 3780,
-      bookedMinutes: 105,
+      bookedMinutes: 135,
       total: 6,
       completed: 4,
       noShow: 1,
       cancelled: 1,
     });
-    expect(byId.get(ids.A!)!.rate).toBeCloseTo(105 / 3780, 10);
+    expect(byId.get(ids.A!)!.rate).toBeCloseTo(135 / 3780, 10);
     // Dr B : 4 lundis × 240 = 960 ; réservé : b1 60 + b2 30.
     expect(byId.get(ids.B!)).toMatchObject({ openMinutes: 960, bookedMinutes: 90, completed: 1 });
     // Dr C, archivé, sans horaires mais avec un rendez-vous : affiché, occupation vide.
     expect(byId.get(ids.C!)).toMatchObject({ openMinutes: 0, bookedMinutes: 0, rate: null });
     expect(activity!.occupancy).toEqual({
       openMinutes: 4740,
-      bookedMinutes: 195,
-      rate: 195 / 4740,
+      bookedMinutes: 225,
+      rate: 225 / 4740,
     });
   });
 
@@ -567,7 +571,7 @@ describe('tableau de bord : calculs sur données réelles', () => {
     expect(d.practitionerId).toBe(ids.A);
     expect(d.activity).toMatchObject({ total: 6, completed: 4, noShow: 1, cancelled: 1 });
     expect(d.activity!.byPractitioner.map((p) => p.practitionerId)).toEqual([ids.A]);
-    expect(d.activity!.occupancy).toMatchObject({ openMinutes: 3780, bookedMinutes: 105 });
+    expect(d.activity!.occupancy).toMatchObject({ openMinutes: 3780, bookedMinutes: 135 });
     expect(d.revenue).toMatchObject({ totalCents: 6000, count: 1, previousTotalCents: 0 });
     expect(d.unbilled!.count).toBe(3);
     // Les patients et le restant dû restent ceux du cabinet.
@@ -641,6 +645,7 @@ describe('tableau de bord : calculs sur données réelles', () => {
       total: 0,
       completed: 0,
       noShowRate: null,
+      presenceRate: null,
       cancellationRate: null,
       patientsSeen: 0,
       upcomingNext7Days: 0,
@@ -652,7 +657,7 @@ describe('tableau de bord : calculs sur données réelles', () => {
     expect(d.activity!.series.every((b) => b.completed + b.scheduled === 0)).toBe(true);
     expect(d.patients).toEqual({ active: 0, new: 0, previousNew: 0 });
     expect(d.receivables).toEqual({ totalRemainingCents: 0, patients: 0 });
-    expect(d.unbilled).toEqual({ count: 0, items: [] });
+    expect(d.unbilled).toEqual({ count: 0, exempt: 0, items: [] });
     expect(d.revenue).toMatchObject({
       totalCents: 0,
       count: 0,
@@ -660,6 +665,19 @@ describe('tableau de bord : calculs sur données réelles', () => {
       byPractitioner: [],
     });
     expect(d.revenue!.series.every((b) => b.amountCents === 0)).toBe(true);
+  });
+
+  it('« sans facturation » : le rendez-vous gratuit sort des oublis d’encaissement, compté à part', async () => {
+    await finance.setBillingExempt(secretary, ids.a1!, { billingExempt: true }, META);
+    try {
+      const d = await september();
+      expect(d.unbilled!.count).toBe(3);
+      expect(d.unbilled!.exempt).toBe(1);
+      expect(d.unbilled!.items.map((i) => i.appointmentId)).not.toContain(ids.a1);
+    } finally {
+      await finance.setBillingExempt(secretary, ids.a1!, { billingExempt: false }, META);
+    }
+    expect((await september()).unbilled).toMatchObject({ count: 4, exempt: 0 });
   });
 
   it('période invalide ou trop longue : refus', async () => {

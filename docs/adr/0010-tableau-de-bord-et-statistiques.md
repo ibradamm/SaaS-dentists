@@ -35,9 +35,10 @@ Toutes les dates sont des **dates locales du cabinet**. « Dans la période » s
 | Rendez-vous de la période | Rendez-vous dont le **début** est dans la période, hors annulés | Oui |
 | Honorés, patients absents, annulés, prévus | Même base, par statut actuel. Un rendez-vous annulé compte à sa date prévue, pas à la date d'annulation | Oui |
 | Taux d'absence | Absents ÷ (honorés + absents). Vide si aucun rendez-vous passé n'a été pointé | Oui |
+| Taux de présence | Honorés ÷ (honorés + absents) : le complément du taux d'absence, affiché avec lui | Oui |
 | Taux d'annulation | Annulés ÷ tous les rendez-vous de la période, annulés compris. Vide si aucun | Oui |
 | Patients vus | Patients distincts ayant au moins un rendez-vous honoré dans la période | Oui |
-| Taux d'occupation | Voir la section 4 | Oui |
+| Occupation du planning | Voir la section 4 | Oui |
 | Activité par période | Honorés, absents, annulés et prévus par jour, semaine ou mois (section 3) | Oui |
 | Types les plus fréquents | Les 5 types de rendez-vous les plus nombreux, hors annulés, avec leur part | Oui |
 | Rendez-vous à venir | Rendez-vous « prévus » qui commencent dans les 7 prochains jours à partir de maintenant ; ne dépend pas de la période | Oui |
@@ -54,7 +55,7 @@ Toutes les dates sont des **dates locales du cabinet**. « Dans la période » s
 | Indicateur | Définition |
 |---|---|
 | Restant à encaisser | Montants dus ouverts moins paiements valides, pour tout le cabinet, à l'instant de la consultation (même calcul que la page « À encaisser ») ; nombre de patients concernés |
-| Honorés sans acte saisi | Rendez-vous honorés de la période sans aucun acte ouvert qui leur soit rattaché ; nombre et liste des 10 plus récents, chacun avec un lien « Encaisser ». Exige aussi `appointment.read`. Filtre praticien : oui |
+| Honorés sans acte saisi | Rendez-vous honorés de la période sans aucun acte ouvert qui leur soit rattaché, **hors rendez-vous marqués « sans facturation »** (comptés à part) ; nombre et liste des 10 plus récents, chacun avec « Encaisser » et « Sans facturation ». Exige aussi `appointment.read`. Filtre praticien : oui |
 
 ### Revenus (permission `finance.reports.read`)
 
@@ -97,12 +98,13 @@ Le **filtre praticien** s'applique aux revenus par le praticien de l'acte. Toute
   - une année civile complète → l'année précédente ;
   - sinon, le même nombre de jours juste avant (le jour précédent, la semaine précédente, etc.).
 
-## 4. Taux d'occupation
+## 4. Occupation du planning
 
 - **Temps ouvert** : plages de travail du praticien moins ses absences et blocages et ceux du cabinet. C'est le calcul de disponibilité existant (`computeAvailability`, ADR 0006).
-- **Temps réservé** : durée des rendez-vous qui occupent le créneau **au sens de l'agenda** (prévus et honorés, `occupies_slot`), **limitée au temps ouvert**.
-  - Un rendez-vous accordé hors horaires ne fait pas dépasser 100 %.
-  - Un patient absent libère son créneau (ADR 0007) : il n'est pas compté ici, il apparaît dans le taux d'absence. Une seule définition du créneau occupé pour l'agenda et les statistiques.
+- **Temps réservé au planning** (définition du porteur du projet, validation de la Phase 8) : durée des rendez-vous **prévus, honorés et patients absents**, **limitée au temps ouvert**.
+  - Un patient absent compte : son créneau était réservé et inutilisable pour un autre patient. L'agenda, lui, libère ce créneau après coup (ADR 0007) ; si un autre rendez-vous y est pris, le temps n'est compté qu'une fois.
+  - Un rendez-vous annulé ne compte pas.
+  - Un rendez-vous accordé hors horaires ne compte pas : le taux ne dépasse jamais 100 %.
 - **Taux** : temps réservé ÷ temps ouvert, par praticien et pour tout le cabinet (somme des temps). Vide si aucun temps ouvert.
 - Sur une période qui s'étend dans le futur, il mesure le **remplissage** de l'agenda, ce qui répond à la question « faut-il ouvrir ou libérer des créneaux ? ».
 
@@ -165,3 +167,12 @@ Le **filtre praticien** s'applique aux revenus par le praticien de l'acte. Toute
 | Bibliothèque de graphiques | Poids (plusieurs dizaines de ko) pour des barres simples |
 | Nouvelle permission « statistiques » | Les permissions des données sources suffisent et évitent qu'un rôle voie en statistiques ce qu'il ne peut pas lire en détail |
 | « Nouveaux patients » = premier rendez-vous honoré | Plus juste cliniquement mais dépend de l'historique antérieur au logiciel ; la création de fiche est une donnée fiable |
+
+## 10. Réponses du porteur du projet (validation de la Phase 8, 2026-09-27)
+
+| # | Question | Réponse | Conséquence dans le code |
+|---|---|---|---|
+| 1 | Rendez-vous gratuits comptés comme oublis d'encaissement | Ajouter une mention « sans facturation » | Colonne `appointments.billing_exempt` (migrations 0015-0016, seule colonne ajoutée aux droits de mise à jour). Route `POST /api/appointments/:id/billing` (`payment.write`, tracée : `appointment.billing_exempt`). La mention et un acte ouvert s'excluent : la mention est refusée si un acte ouvert existe, un acte est refusé sur un rendez-vous marqué. Les deux écritures verrouillent la ligne du rendez-vous (`FOR UPDATE` et `FOR SHARE`) : simultanées, la seconde attend puis est refusée. Statistiques : exclu des oublis, compté à part |
+| 2 | Objectifs chiffrés ; export CSV | Pas d'objectifs au MVP. Export CSV plus tard | Export ajouté aux extensions futures (`docs/future/README.md`) |
+| 3 | Définition de l'occupation | Honorés et absents comptent, annulés non, jamais plus de 100 % ; distinguer occupation du planning, absence et présence | Section 4 réécrite ; `plannedIntervals` (prévus, honorés, absents) ; taux de présence ajouté (global et par praticien) ; interface : « Occupation du planning », « Taux de présence » avec le taux d'absence |
+

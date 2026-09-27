@@ -24,6 +24,7 @@ const columns = {
   status: appointments.status,
   note: appointments.note,
   cancellationReason: appointments.cancellationReason,
+  billingExempt: appointments.billingExempt,
   version: appointments.version,
 };
 /** Rendez-vous du cabinet avec patient (nom, téléphone principal) et type. */
@@ -77,6 +78,7 @@ export async function readAppointments(
     status: row.status as Appointment['status'],
     note: row.note,
     cancellationReason: row.cancellationReason,
+    billingExempt: row.billingExempt,
     version: row.version,
   }));
 }
@@ -104,6 +106,40 @@ export async function occupiedIntervals(
         eq(appointments.clinicId, clinicId),
         inArray(appointments.practitionerId, [...practitionerIds]),
         eq(appointments.occupiesSlot, true),
+        overlapping(range),
+      ),
+    );
+  return rows.map((r) => ({
+    practitionerId: r.practitionerId,
+    start: r.startAt.getTime(),
+    end: r.endAt.getTime(),
+  }));
+}
+
+/**
+ * Plages réservées au planning (statistiques, docs/adr/0010) : prévus, honorés et patients
+ * absents. Un absent a rendu son créneau inutilisable pour un autre patient, même si l'agenda
+ * le libère ensuite ; les annulés ne comptent pas.
+ */
+export async function plannedIntervals(
+  tx: Transaction,
+  clinicId: string,
+  practitionerIds: readonly string[],
+  range: { start: Date; end: Date },
+): Promise<(Interval & { practitionerId: string })[]> {
+  if (practitionerIds.length === 0) return [];
+  const rows = await tx
+    .select({
+      practitionerId: appointments.practitionerId,
+      startAt: appointments.startAt,
+      endAt: appointments.endAt,
+    })
+    .from(appointments)
+    .where(
+      and(
+        eq(appointments.clinicId, clinicId),
+        inArray(appointments.practitionerId, [...practitionerIds]),
+        inArray(appointments.status, ['SCHEDULED', 'COMPLETED', 'NO_SHOW']),
         overlapping(range),
       ),
     );

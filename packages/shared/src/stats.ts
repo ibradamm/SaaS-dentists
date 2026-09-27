@@ -20,6 +20,10 @@ const cents = z.number().int();
 /** Fraction de 0 à 1 ; null quand le dénominateur est nul (« aucune donnée », pas « 0 % »). */
 const rate = z.number().min(0).max(1).nullable();
 const period = z.object({ from: localDateSchema, to: localDateSchema });
+/**
+ * Occupation du planning : temps réservé (prévus, honorés, absents ; pas les annulés) dans le
+ * temps ouvert (horaires moins indisponibilités), donc jamais plus de 100 %.
+ */
 const occupancy = {
   bookedMinutes: count,
   openMinutes: count,
@@ -33,7 +37,10 @@ export const activityStatsSchema = z.object({
   completed: count,
   noShow: count,
   cancelled: count,
+  /** Absents ÷ (honorés + absents). */
   noShowRate: rate,
+  /** Honorés ÷ (honorés + absents) : complément du taux d'absence. */
+  presenceRate: rate,
   cancellationRate: rate,
   patientsSeen: count,
   previousCompleted: count,
@@ -49,6 +56,7 @@ export const activityStatsSchema = z.object({
       completed: count,
       noShow: count,
       cancelled: count,
+      presenceRate: rate,
       ...occupancy,
     }),
   ),
@@ -87,6 +95,8 @@ export const receivablesStatsSchema = z.object({
 
 export const unbilledStatsSchema = z.object({
   count,
+  /** Rendez-vous honorés marqués « sans facturation » : exclus de `count`, affichés à part. */
+  exempt: count,
   items: z.array(
     z.object({
       appointmentId: z.uuid(),

@@ -103,6 +103,7 @@ function appointment(overrides: Partial<Appointment> = {}): Appointment {
     status: 'SCHEDULED',
     note: null,
     cancellationReason: null,
+    billingExempt: false,
     version: 1,
     ...overrides,
   };
@@ -567,6 +568,40 @@ describe('agenda', () => {
       'href',
       `/patients/${PATIENT}?encaisser=${RDV_PAST}#paiements`,
     );
+  });
+
+  it('« Sans facturation » : mention envoyée ; rendez-vous marqué : badge, rétablissement, pas d’encaissement', async () => {
+    let exempt = false;
+    const calls = setup('SECRETARY', {
+      [`GET /api/appointments/${RDV_PAST}`]: () => ({
+        status: 200,
+        body: { ...past, billingExempt: exempt },
+      }),
+      [`POST /api/appointments/${RDV_PAST}/billing`]: (call) => {
+        exempt = (call.body as { billingExempt: boolean }).billingExempt;
+        return { status: 200, body: { appointmentId: RDV_PAST, billingExempt: exempt } };
+      },
+    });
+    renderApp('/agenda');
+    fireEvent.click(await screen.findByRole('button', { name: /Dr Alpha, 09:00/ }));
+    const details = await panel('Rendez-vous');
+    fireEvent.click(await within(details).findByRole('button', { name: 'Sans facturation' }));
+    await waitFor(() =>
+      expect(posts(calls, `/api/appointments/${RDV_PAST}/billing`)[0]?.body).toEqual({
+        billingExempt: true,
+      }),
+    );
+    expect(
+      await within(details).findByText('Sans facturation', { selector: 'span' }),
+    ).toBeVisible();
+    expect(within(details).queryByRole('link', { name: 'Encaisser' })).toBeNull();
+    fireEvent.click(within(details).getByRole('button', { name: 'Rétablir la facturation' }));
+    await waitFor(() =>
+      expect(posts(calls, `/api/appointments/${RDV_PAST}/billing`)[1]?.body).toEqual({
+        billingExempt: false,
+      }),
+    );
+    expect(await within(details).findByRole('link', { name: 'Encaisser' })).toBeVisible();
   });
 
   it('sans droit de saisie des paiements : pas de lien « Encaisser »', async () => {

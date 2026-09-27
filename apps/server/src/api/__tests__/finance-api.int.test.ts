@@ -25,6 +25,8 @@ describe('API paiements et revenus', () => {
   let otherClinic: Clinic;
   const sessions: Partial<Record<Role, Browser>> = {};
   let counter = 0;
+  let practitionerId: string;
+  let typeId: string;
 
   async function signedIn(role: Role, c: Clinic = clinic): Promise<Browser> {
     const user = await createUser(t.ownerDb, c.id, role);
@@ -73,6 +75,16 @@ describe('API paiements et revenus', () => {
     for (const role of ['ADMIN', 'DENTIST', 'SECRETARY'] as const) {
       sessions[role] = await signedIn(role);
     }
+    practitionerId = (
+      await as('ADMIN').post('/api/practitioners', { displayName: 'Dr Http', color: '#0ea5e9' })
+    ).json<{ id: string }>().id;
+    typeId = (
+      await as('ADMIN').post('/api/appointment-types', {
+        name: 'Contrôle',
+        durationMinutes: 30,
+        color: '#0ea5e9',
+      })
+    ).json<{ id: string }>().id;
   });
   afterAll(async () => {
     await app.close();
@@ -210,6 +222,41 @@ describe('API paiements et revenus', () => {
     expect(
       (await dentist.get('/api/finance/revenue?from=2026-09-30&to=2026-09-01')).statusCode,
     ).toBe(400);
+  });
+
+  it('« sans facturation » : secrétaire autorisée, CSRF exigé, autre cabinet 404, acte ensuite refusé', async () => {
+    const patient = await newPatient();
+    const appointment = await as('SECRETARY').post('/api/appointments', {
+      practitionerId: practitionerId,
+      patientId: patient,
+      appointmentTypeId: typeId,
+      start: '2026-09-21T09:00',
+      allowOutsideAvailability: true,
+    });
+    expect(appointment.statusCode).toBe(201);
+    const id = appointment.json<{ id: string }>().id;
+    const url = `/api/appointments/${id}/billing`;
+    expect(
+      (await as('SECRETARY').post(url, { billingExempt: true }, { 'x-csrf-token': 'faux' })).json(),
+    ).toMatchObject({ error: { code: 'CSRF_INVALID' } });
+    const outsider = await signedIn('ADMIN', otherClinic);
+    expect((await outsider.post(url, { billingExempt: true })).statusCode).toBe(404);
+    expect((await as('SECRETARY').post(url, { billingExempt: 'oui' })).statusCode).toBe(400);
+    const res = await as('SECRETARY').post(url, { billingExempt: true });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ appointmentId: id, billingExempt: true });
+    expect(
+      (await as('SECRETARY').get(`/api/appointments/${id}`)).json<{ billingExempt: boolean }>()
+        .billingExempt,
+    ).toBe(true);
+    const charge = await as('SECRETARY').post('/api/charges', {
+      idempotencyKey: randomUUID(),
+      patientId: patient,
+      appointmentId: id,
+      label: 'Contrôle',
+      amountCents: 3000,
+    });
+    expect(charge.statusCode).toBe(409);
   });
 
   it('un autre cabinet ne voit ni le compte, ni les actes, ni les paiements', async () => {

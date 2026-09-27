@@ -54,6 +54,9 @@ export const appointments = pgTable(
       .references(() => appointmentStatuses.code),
     // Recopié du statut par un déclencheur ; jamais écrit par l'application.
     occupiesSlot: boolean('occupies_slot').notNull().default(true),
+    // Rendez-vous sans facturation (contrôle gratuit, par exemple) : il ne compte pas comme
+    // oubli d'encaissement ; aucun acte ne peut lui être rattaché tant que la mention reste.
+    billingExempt: boolean('billing_exempt').notNull().default(false),
     note: text('note'),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancelledBy: uuid('cancelled_by'),

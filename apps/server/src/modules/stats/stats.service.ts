@@ -20,7 +20,7 @@ import {
 } from '../../db/schema';
 import { withTenant } from '../../db/tenant';
 import { AppError } from '../../lib/errors';
-import { occupiedIntervals } from '../appointments/queries';
+import { plannedIntervals } from '../appointments/queries';
 import type { UserActor } from '../auth/auth.types';
 import { authorizeAny } from '../auth/authorize';
 import {
@@ -228,7 +228,8 @@ export function createStatsService(deps: { db: Database; now?: () => Date }) {
       .where(startingIn(ctx, ctx.range))
       .groupBy(appointments.practitionerId);
 
-    // Occupation : praticiens actifs, plus tout praticien qui a des rendez-vous sur la période.
+    // Occupation du planning : praticiens actifs, plus tout praticien qui a des rendez-vous sur
+    // la période. Temps réservé : prévus, honorés et absents (plannedIntervals).
     const roster = await tx
       .select({
         id: practitioners.id,
@@ -251,7 +252,7 @@ export function createStatsService(deps: { db: Database; now?: () => Date }) {
     const ids = shown.map((p) => p.id);
     const periods = await readPeriods(tx, ctx.clinicId, ids, ctx.period);
     const blocks = await readBlocks(tx, ctx.clinicId, ctx.range, ids);
-    const booked = await occupiedIntervals(tx, ctx.clinicId, ids, ctx.range);
+    const booked = await plannedIntervals(tx, ctx.clinicId, ids, ctx.range);
     const byPractitioner = shown.map((p) => {
       const { available } = computeAvailability({
         periods: periods
@@ -277,6 +278,10 @@ export function createStatsService(deps: { db: Database; now?: () => Date }) {
         completed: counts?.completed ?? 0,
         noShow: counts?.noShow ?? 0,
         cancelled: counts?.cancelled ?? 0,
+        presenceRate: ratio(
+          counts?.completed ?? 0,
+          (counts?.completed ?? 0) + (counts?.noShow ?? 0),
+        ),
         ...occupancy,
         rate: ratio(occupancy.bookedMinutes, occupancy.openMinutes),
       };
@@ -291,6 +296,7 @@ export function createStatsService(deps: { db: Database; now?: () => Date }) {
       noShow,
       cancelled,
       noShowRate: ratio(noShow, completed + noShow),
+      presenceRate: ratio(completed, completed + noShow),
       cancellationRate: ratio(cancelled, total + cancelled),
       patientsSeen: seen?.patientsSeen ?? 0,
       previousCompleted: seen?.previousCompleted ?? 0,
@@ -316,11 +322,25 @@ export function createStatsService(deps: { db: Database; now?: () => Date }) {
     return { active: row?.active ?? 0, new: row?.created ?? 0, previousNew: row?.previousNew ?? 0 };
   }
 
-  /** Rendez-vous honorés de la période sans acte ouvert rattaché (oubli de facturation). */
+  /**
+   * Rendez-vous honorés de la période sans acte ouvert rattaché (oubli de facturation), hors
+   * rendez-vous marqués « sans facturation », comptés à part.
+   */
   async function unbilled(ctx: Context) {
+    const [exempt] = await ctx.tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(appointments)
+      .where(
+        and(
+          startingIn(ctx, ctx.range),
+          eq(appointments.status, 'COMPLETED'),
+          eq(appointments.billingExempt, true),
+        ),
+      );
     const where = and(
       startingIn(ctx, ctx.range),
       eq(appointments.status, 'COMPLETED'),
+      eq(appointments.billingExempt, false),
       notExists(
         ctx.tx
           .select({ one: sql`1` })
@@ -365,6 +385,7 @@ export function createStatsService(deps: { db: Database; now?: () => Date }) {
       .limit(UNBILLED_ITEMS);
     return {
       count: total?.count ?? 0,
+      exempt: exempt?.count ?? 0,
       items: items.map((i) => ({
         appointmentId: i.appointmentId,
         startAt: i.startAt.toISOString(),

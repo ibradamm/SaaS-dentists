@@ -80,7 +80,7 @@ describe('API tableau de bord', () => {
     // les nouveaux patients sont vérifiés par le test du service, à dates explicites.
     expect(body.patients).toMatchObject({ active: 1 });
     expect(body.receivables).toEqual({ totalRemainingCents: 3000, patients: 1 });
-    expect(body.unbilled).toEqual({ count: 0, items: [] });
+    expect(body.unbilled).toEqual({ count: 0, exempt: 0, items: [] });
     // Section absente de la réponse elle-même, pas masquée par l'interface.
     expect('revenue' in res.json<object>()).toBe(revenue);
     if (revenue) expect(body.revenue).toMatchObject({ totalCents: 9000, count: 2 });

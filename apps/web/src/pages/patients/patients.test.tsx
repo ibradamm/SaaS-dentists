@@ -364,6 +364,7 @@ describe('rendez-vous du patient', () => {
     status: 'SCHEDULED',
     note: null,
     cancellationReason: null,
+    billingExempt: false,
     version: 1,
     ...overrides,
   });

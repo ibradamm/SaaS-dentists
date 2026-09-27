@@ -1,6 +1,7 @@
 import {
   MAX_JOURNAL_PAYMENTS,
   MAX_REVENUE_DAYS,
+  billingExemptionRequestSchema,
   cancelChargeRequestSchema,
   createChargeRequestSchema,
   formatCents,
@@ -8,6 +9,7 @@ import {
   recordPaymentRequestSchema,
   revenueQuerySchema,
   voidPaymentRequestSchema,
+  type BillingExemptionRequest,
   type CancelChargeRequest,
   type Charge,
   type CreateChargeRequest,
@@ -380,16 +382,26 @@ export function createFinanceService(deps: { db: Database; now?: () => Date }) {
       }
       let practitionerId = data.practitionerId;
       if (data.appointmentId) {
+        // Verrou partagé : une mention « sans facturation » simultanée attend, puis voit l'acte.
         const [appointment] = await tx
           .select({
             patientId: appointments.patientId,
             practitionerId: appointments.practitionerId,
+            billingExempt: appointments.billingExempt,
           })
           .from(appointments)
           .where(
             and(eq(appointments.clinicId, actor.clinicId), eq(appointments.id, data.appointmentId)),
-          );
+          )
+          .for('share');
         if (!appointment) throw new AppError('NOT_FOUND', 'Rendez-vous introuvable', 404);
+        if (appointment.billingExempt) {
+          throw new AppError(
+            'CONFLICT',
+            'Rendez-vous marqué « sans facturation » : rétablissez la facturation avant de saisir un acte',
+            409,
+          );
+        }
         if (appointment.patientId !== data.patientId) {
           throw new AppError(
             'VALIDATION_FAILED',
@@ -767,7 +779,69 @@ export function createFinanceService(deps: { db: Database; now?: () => Date }) {
     });
   }
 
+  /**
+   * Mention « sans facturation » d'un rendez-vous (rendez-vous gratuit) : il ne compte plus comme
+   * oubli d'encaissement. Refusée si un acte ouvert lui est rattaché ; tracée dans l'audit.
+   */
+  async function setBillingExempt(
+    actor: UserActor,
+    appointmentId: string,
+    input: BillingExemptionRequest,
+    meta: RequestMeta,
+  ): Promise<{ appointmentId: string; billingExempt: boolean }> {
+    authorize(actor, 'payment.write');
+    const { billingExempt } = billingExemptionRequestSchema.parse(input);
+    return withTenant(db, actor.clinicId, async (tx) => {
+      const [appointment] = await tx
+        .select({ status: appointments.status, billingExempt: appointments.billingExempt })
+        .from(appointments)
+        .where(and(eq(appointments.clinicId, actor.clinicId), eq(appointments.id, appointmentId)))
+        .for('update');
+      if (!appointment) throw new AppError('NOT_FOUND', 'Rendez-vous introuvable', 404);
+      if (appointment.billingExempt === billingExempt) return { appointmentId, billingExempt };
+      if (appointment.status === 'CANCELLED') {
+        throw new AppError('CONFLICT', 'Rendez-vous annulé', 409);
+      }
+      if (billingExempt) {
+        const [open] = await tx
+          .select({ id: charges.id })
+          .from(charges)
+          .where(
+            and(
+              eq(charges.clinicId, actor.clinicId),
+              eq(charges.appointmentId, appointmentId),
+              eq(charges.status, 'OPEN'),
+            ),
+          )
+          .limit(1);
+        if (open) {
+          throw new AppError(
+            'CONFLICT',
+            'Un acte est déjà saisi pour ce rendez-vous : annulez-le avant de le marquer « sans facturation »',
+            409,
+          );
+        }
+      }
+      await tx
+        .update(appointments)
+        .set({ billingExempt })
+        .where(and(eq(appointments.clinicId, actor.clinicId), eq(appointments.id, appointmentId)));
+      await recordAudit(tx, {
+        actorType: 'USER',
+        actorId: actor.userId,
+        action: 'appointment.billing_exempt',
+        entityType: 'appointment',
+        entityId: appointmentId,
+        changes: { billingExempt: { from: !billingExempt, to: billingExempt } },
+        requestId: meta.requestId,
+        ip: meta.ip,
+      });
+      return { appointmentId, billingExempt };
+    });
+  }
+
   return {
+    setBillingExempt,
     account,
     createCharge,
     recordPayment,

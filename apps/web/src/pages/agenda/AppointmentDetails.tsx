@@ -16,6 +16,7 @@ import { useNow } from '../../lib/hooks';
 import { AppointmentForm } from './AppointmentForm';
 import { appointmentKey, refreshAgenda } from './refresh';
 import { APPOINTMENT_STATUS_LABELS, STATUS_ACTION_LABELS, STATUS_TONES } from './labels';
+import { DASHBOARD_KEY } from '../../lib/queries';
 
 /** Fiche d'un rendez-vous : détails, changements de statut, modification. */
 export function AppointmentDetails({
@@ -57,6 +58,18 @@ export function AppointmentDetails({
       setCancelling(false);
       setReason('');
       await refreshAgenda(queryClient, updated);
+    },
+  });
+
+  // Mention « sans facturation » (rendez-vous gratuit) : ne compte pas comme oubli d'encaissement.
+  const billing = useMutation({
+    mutationFn: (billingExempt: boolean) => api.setBillingExempt(id, billingExempt),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: appointmentKey(id) }),
+        queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY }),
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+      ]);
     },
   });
 
@@ -121,6 +134,14 @@ export function AppointmentDetails({
           <>
             <dt className="font-medium">Note</dt>
             <dd className="whitespace-pre-wrap">{a.note}</dd>
+          </>
+        )}
+        {a.billingExempt && (
+          <>
+            <dt className="font-medium">Facturation</dt>
+            <dd>
+              <Badge>Sans facturation</Badge>
+            </dd>
           </>
         )}
         {a.cancellationReason && (
@@ -200,14 +221,24 @@ export function AppointmentDetails({
           })}
         </div>
       )}
+      {billing.isError && <Alert>{errorMessage(billing.error)}</Alert>}
       {canCharge && a.status !== 'CANCELLED' && (
-        <div>
-          <Link
-            className="inline-flex min-h-11 items-center rounded-md bg-white px-4 text-sm font-medium text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700"
-            to={`/patients/${a.patient.id}?encaisser=${a.id}#paiements`}
+        <div className="flex flex-wrap gap-2">
+          {!a.billingExempt && (
+            <Link
+              className="inline-flex min-h-11 items-center rounded-md bg-white px-4 text-sm font-medium text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700"
+              to={`/patients/${a.patient.id}?encaisser=${a.id}#paiements`}
+            >
+              Encaisser
+            </Link>
+          )}
+          <Button
+            variant="secondary"
+            disabled={billing.isPending}
+            onClick={() => billing.mutate(!a.billingExempt)}
           >
-            Encaisser
-          </Link>
+            {a.billingExempt ? 'Rétablir la facturation' : 'Sans facturation'}
+          </Button>
         </div>
       )}
       {canWrite && a.status === 'SCHEDULED' && !started && (

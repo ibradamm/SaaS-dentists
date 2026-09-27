@@ -177,3 +177,11 @@ export const paymentsJournalResponseSchema = z.object({
   ),
 });
 export type PaymentsJournalResponse = z.infer<typeof paymentsJournalResponseSchema>;
+
+/** Mention « sans facturation » d'un rendez-vous (rendez-vous gratuit, docs/adr/0010). */
+export const billingExemptionRequestSchema = z.object({ billingExempt: z.boolean() });
+export type BillingExemptionRequest = z.input<typeof billingExemptionRequestSchema>;
+export const billingExemptionResponseSchema = z.object({
+  appointmentId: z.uuid(),
+  billingExempt: z.boolean(),
+});
