@@ -216,6 +216,86 @@ describe('paiements et revenus', () => {
       expect(rows).toHaveLength(1);
     });
 
+    it('même saisie pour tout le restant, le premier envoi pas encore validé : le second attend puis le renvoie', async () => {
+      const patient = await newPatient();
+      const { charge } = await due(patient, 4000);
+      const key = randomUUID();
+      // Premier envoi : transaction ouverte, paiement inséré, pas encore validé.
+      const first = await t.appPool.connect();
+      try {
+        await first.query('BEGIN');
+        await first.query("SELECT set_config('app.clinic_id', $1, true)", [clinic.id]);
+        await first.query(
+          `INSERT INTO payments (id, patient_id, charge_id, amount_cents, currency, method, idempotency_key)
+           VALUES (gen_random_uuid(), $1, $2, 4000, 'EUR', 'CARD', $3)`,
+          [patient, charge.id, key],
+        );
+        // Second envoi, identique : il ne doit ni échouer (« dépasse le restant dû ») ni doubler.
+        const second = finance
+          .recordPayment(
+            secretary,
+            { idempotencyKey: key, chargeId: charge.id, amountCents: 4000, method: 'CARD' },
+            META,
+          )
+          .then(
+            (r) => ({ replayed: r.replayed, remaining: r.charge.remainingCents }),
+            (e: { code?: string }) => e.code,
+          );
+        for (let i = 0; i < 50; i += 1) {
+          const { rows } = await t.ownerPool.query<{ n: number }>(
+            "SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()",
+          );
+          if (rows[0]!.n > 0) break;
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        await first.query('COMMIT');
+        expect(await second).toEqual({ replayed: true, remaining: 0 });
+      } finally {
+        first.release();
+      }
+      const account = await finance.account(secretary, patient);
+      expect(account.charges[0]!.payments).toHaveLength(1);
+    });
+
+    it('même clé sur deux actes différents en même temps : refus propre (409), jamais d’erreur 500', async () => {
+      const patient = await newPatient();
+      const [{ charge: x }, { charge: y }] = [await due(patient, 3000), await due(patient, 3000)];
+      const key = randomUUID();
+      const first = await t.appPool.connect();
+      try {
+        await first.query('BEGIN');
+        await first.query("SELECT set_config('app.clinic_id', $1, true)", [clinic.id]);
+        await first.query(
+          `INSERT INTO payments (id, patient_id, charge_id, amount_cents, currency, method, idempotency_key)
+           VALUES (gen_random_uuid(), $1, $2, 1000, 'EUR', 'CARD', $3)`,
+          [patient, x.id, key],
+        );
+        const second = finance
+          .recordPayment(
+            secretary,
+            { idempotencyKey: key, chargeId: y.id, amountCents: 1000, method: 'CARD' },
+            META,
+          )
+          .then(
+            () => 'accepté',
+            (e: { code?: string }) => e.code ?? 'erreur interne',
+          );
+        for (let i = 0; i < 50; i += 1) {
+          const { rows } = await t.ownerPool.query<{ n: number }>(
+            "SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()",
+          );
+          if (rows[0]!.n > 0) break;
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        await first.query('COMMIT');
+        expect(await second).toBe('CONFLICT');
+      } finally {
+        first.release();
+      }
+      const account = await finance.account(secretary, patient);
+      expect(account.paidCents).toBe(1000);
+    });
+
     it('création avec encaissement envoyée deux fois en même temps : un seul acte, un seul paiement', async () => {
       const patient = await newPatient();
       const request = {

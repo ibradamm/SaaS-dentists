@@ -48,9 +48,9 @@ Environnement : Node 22.22, PostgreSQL 16 local, Chromium 1194.
 | Formatage, lint, typage | OK |
 | Tests `packages/shared` | 73/73 |
 | Tests `apps/server` : unitaires | 81/81 |
-| Tests `apps/server` : intégration (base jetable, rôle applicatif réel) | 229/229 |
+| Tests `apps/server` : intégration (base jetable, rôle applicatif réel) | 231/231 |
 | Tests `apps/web` | 104/104 |
-| Tests par mutation (voir ci-dessous) | 20 failles introduites, 20 détectées |
+| Tests par mutation (voir ci-dessous) | 21 failles introduites, 21 détectées |
 | Parcours réels dans Chromium, version de production, ordinateur, tablette et téléphone, deux cabinets | OK |
 | Build, dérive schéma/migrations, `pnpm audit --prod` | OK ; aucune dérive ; aucune vulnérabilité connue |
 | Budget du chargement initial (`pnpm check:bundle`) | 143 ko compressés pour un budget de 160 ko (142 ko en Phase 6) ; les pages de finances sont chargées à la demande |
@@ -62,6 +62,8 @@ Environnement : Node 22.22, PostgreSQL 16 local, Chromium 1194.
 | Deux encaissements simultanés qui dépasseraient le dû | Base (deux connexions réelles), service, navigateur (secrétaire et dentiste sur le même acte) | Le second attend le verrou puis est refusé ; jamais plus payé que dû |
 | Annulation d'un acte et encaissement simultanés, dans les deux ordres | Base | Le second attend puis est refusé (acte déjà payé, ou acte annulé) ; jamais un acte annulé portant un paiement valide |
 | Double envoi de la même saisie (même clé) | Service, HTTP (201 puis 200, même identifiant), navigateur (double clic) | Un seul acte, un seul paiement |
+| Même saisie pour **tout** le restant, premier envoi pas encore validé | Service (transaction tenue ouverte, déterministe) | Le second attend le verrou, trouve le paiement du premier et le renvoie (200), sans faux « dépasse le restant dû » |
+| Même clé sur deux actes différents au même instant | Service (déterministe) | Refus 409, jamais d'erreur 500 |
 | Réponse perdue : le serveur enregistre, le navigateur ne reçoit rien, l'utilisatrice réessaie | Interface (tests), navigateur (réponse coupée) | Même clé renvoyée, saisie existante retournée, aucun doublon |
 | Même clé, contenu différent | Service, HTTP | Refus 409, rien n'est modifié |
 | Double annulation du même paiement | Service, navigateur | Une seule annulation ; la seconde reçoit 409 |
@@ -77,7 +79,7 @@ Chaque faille a été introduite seule, les tests concernés rejoués, puis le f
 | F3 | Base : montant d'un paiement modifiable (droit de colonne) | Base |
 | F4 | Base : paiement annulé remis en « encaissé » | Base |
 | F5 | Base : acte payé annulable | Base, service |
-| F6 | Service : insertion sans `ON CONFLICT` (idempotence) | Service, HTTP (doubles envois simultanés) |
+| F6 | Service : insertion sans `ON CONFLICT` (idempotence) | Service (même clé sur deux actes au même instant) |
 | F7 | Permissions : la secrétaire peut annuler un paiement | Matrice des permissions, service, HTTP |
 | F8 | Service : annulation vérifiée avec le droit de saisie | Service, HTTP |
 | F9 | Service : revenus comptant les paiements annulés | Service, HTTP |
@@ -92,6 +94,7 @@ Chaque faille a été introduite seule, les tests concernés rejoués, puis le f
 | F18 | Interface : dépassement du restant dû non signalé | Interface |
 | F19 | Interface : restant dû absent du résumé de la fiche | Interface |
 | F20 | Interface : page « Revenus » ouverte à `payment.read` | Interface |
+| F21 | Service : montant dû non verrouillé avant la recherche de la clé | Service (même saisie, premier envoi pas encore validé) |
 
 ### Parcours réels dans Chromium
 
@@ -124,7 +127,11 @@ Conditions :
 2. **Test HTTP erroné** : il attendait 409 pour l'annulation d'un acte d'un autre cabinet ; 404 est la bonne réponse (aucune divulgation). Test corrigé.
 3. **Espaces insécables écrits en clair** dans une expression régulière de `money.ts` (lint `no-irregular-whitespace`) : remplacés par leurs échappements.
 4. **Test manquant** : la concurrence entre annulation d'un acte et encaissement n'était pas couverte. Ajoutée dans les deux ordres ; la mutation F1 la fait échouer.
-5. **Avertissement de troncature du journal** calculé par comparaison de deux requêtes distinctes (faux positif possible si un paiement arrive entre les deux) : remplacé par une limite partagée (`MAX_JOURNAL_PAYMENTS`).
+5. **Double envoi simultané pour la totalité du restant dû : refus à tort** (trouvé par la CI, test HTTP, alors qu'il passait en local).
+   - Le second envoi ne voyait pas encore le paiement du premier, puis le déclencheur, qui s'exécute avant la détection du conflit de clé, le refusait comme dépassement : 409 « dépasse le restant dû » au lieu de 200. Aucun doublon en base, mais une erreur affichée à tort.
+   - Correction : le service verrouille le montant dû avant de chercher la clé d'idempotence ; le second envoi attend le premier, trouve sa saisie et la renvoie.
+   - Test déterministe ajouté (transaction tenue ouverte), vérifié en échec sur l'ancien code ; test HTTP rejoué 15 fois sans échec ; mutation F21.
+6. **Avertissement de troncature du journal** calculé par comparaison de deux requêtes distinctes (faux positif possible si un paiement arrive entre les deux) : remplacé par une limite partagée (`MAX_JOURNAL_PAYMENTS`).
 
 ## Écarts par rapport au plan
 

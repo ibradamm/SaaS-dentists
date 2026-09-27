@@ -495,9 +495,10 @@ export function createFinanceService(deps: { db: Database; now?: () => Date }) {
           replayed: true,
         };
       };
-      const previous = await byKey();
-      if (previous) return replay(previous);
-
+      // Verrou du montant dû d'abord, celui que prend le déclencheur : deux envois de la même
+      // saisie sont sérialisés, et le second, qui ne cherche la clé qu'après, trouve le paiement
+      // du premier et le renvoie. Sans cela, le déclencheur le refuserait comme dépassement
+      // avant que le conflit de clé ne soit détecté (ADR 0009, F3 et F6).
       const [charge] = await tx
         .select({
           patientId: charges.patientId,
@@ -506,7 +507,10 @@ export function createFinanceService(deps: { db: Database; now?: () => Date }) {
           currency: charges.currency,
         })
         .from(charges)
-        .where(and(eq(charges.clinicId, actor.clinicId), eq(charges.id, data.chargeId)));
+        .where(and(eq(charges.clinicId, actor.clinicId), eq(charges.id, data.chargeId)))
+        .for('update');
+      const previous = await byKey();
+      if (previous) return replay(previous);
       if (!charge) throw new AppError('NOT_FOUND', 'Acte introuvable', 404);
       if (charge.status !== 'OPEN') throw DATABASE_ERRORS.DF002!();
       // Contrôle préalable pour un message précis ; la base reste l'arbitre en cas de saisies
