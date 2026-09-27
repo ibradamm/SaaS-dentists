@@ -50,7 +50,7 @@ export function TextField({
     .filter(Boolean)
     .join(' ');
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <label htmlFor={id} className="text-sm font-medium text-slate-800">
         {label}
       </label>
@@ -59,7 +59,7 @@ export function TextField({
         {...props}
         aria-invalid={error ? true : undefined}
         aria-describedby={described || undefined}
-        className="min-h-11 rounded-md border border-slate-300 bg-white px-3 text-base focus-visible:border-sky-700 focus-visible:outline-2 focus-visible:outline-sky-700 aria-invalid:border-red-600"
+        className="min-h-11 w-full min-w-0 rounded-md border border-slate-300 bg-white px-3 text-base focus-visible:border-sky-700 focus-visible:outline-2 focus-visible:outline-sky-700 aria-invalid:border-red-600"
       />
       {hint && (
         <p id={`${id}-hint`} className="text-xs text-slate-600">
@@ -81,15 +81,16 @@ export function SelectField({
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement> & { label: string; children: ReactNode }) {
   const id = useId();
+  // min-w-0 et w-full : une option longue (nom et e-mail) ne fait jamais déborder l'écran.
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <label htmlFor={id} className="text-sm font-medium text-slate-800">
         {label}
       </label>
       <select
         id={id}
         {...props}
-        className="min-h-11 rounded-md border border-slate-300 bg-white px-3 text-base focus-visible:outline-2 focus-visible:outline-sky-700"
+        className="min-h-11 w-full min-w-0 rounded-md border border-slate-300 bg-white px-3 text-base focus-visible:outline-2 focus-visible:outline-sky-700"
       >
         {children}
       </select>

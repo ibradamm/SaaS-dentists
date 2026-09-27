@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Alert, Loading, SelectField } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
 import { can, canManageSchedule, useMe } from '../../lib/auth';
-import { CLINIC_QUERY_KEY } from '../settings/ClinicProfilePage';
+import { CLINIC_QUERY_KEY } from '../../lib/queries';
 import { ColorSwatch } from '../settings/colors';
 import { BlocksPanel } from './BlocksPanel';
 import { ScheduleEditor } from './ScheduleEditor';
@@ -28,7 +28,9 @@ export function AvailabilityPage() {
     queryKey: ['practitioners', 'active'],
     queryFn: () => api.listPractitioners(false),
   });
-  const [selected, setSelected] = useState<string | null>(null);
+  // ?praticien=<id> : lien direct (mise en route, accueil).
+  const [params] = useSearchParams();
+  const [selected, setSelected] = useState<string | null>(params.get('praticien'));
   const [tab, setTab] = useState<Tab>('week');
 
   if (clinic.isPending || practitioners.isPending) return <Loading />;

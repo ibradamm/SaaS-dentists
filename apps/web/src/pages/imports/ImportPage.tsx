@@ -10,7 +10,7 @@ import { useId, useState } from 'react';
 import { Link } from 'react-router';
 import { Alert, Button, Loading, SelectField } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
-import { formatDateTime } from '../../lib/format';
+import { formatDateTime } from '../../lib/format-date';
 import {
   FIELD_LABELS,
   mapRows,

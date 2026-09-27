@@ -1,10 +1,11 @@
 import type { MeResponse, Role, SessionRestriction } from '@dental/shared';
 import { permissionsOf } from '@dental/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { vi } from 'vitest';
 import { routes } from '../app/router';
+import { createAppQueryClient } from '../lib/query-client';
 
 export interface MockCall {
   method: string;
@@ -66,7 +67,8 @@ export const unauthenticated = {
 };
 
 export function renderApp(path: string) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // Même cache que l'application (isolation des sessions, retour à la connexion sur 401).
+  const queryClient = createAppQueryClient({ retry: false });
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   render(
     <QueryClientProvider client={queryClient}>

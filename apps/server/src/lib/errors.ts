@@ -1,4 +1,4 @@
-import type { ErrorCode } from '@dental/shared';
+import type { ErrorCode, OverrideReason } from '@dental/shared';
 
 /**
  * Erreur métier ou applicative exposable au client. Le message doit être compréhensible et ne
@@ -9,6 +9,8 @@ export class AppError extends Error {
     readonly code: ErrorCode,
     message: string,
     readonly statusCode: number,
+    /** Raisons d'une confirmation exigée, transmises telles quelles au client. */
+    readonly reasons?: readonly OverrideReason[],
   ) {
     super(message);
     this.name = 'AppError';

@@ -1,7 +1,7 @@
 import { RELATIONSHIPS, type PatientDetail, type Relationship } from '@dental/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import {
   Alert,
   Badge,
@@ -13,9 +13,11 @@ import {
 } from '../../components/ui';
 import { ApiError, api, errorMessage } from '../../lib/api';
 import { can, useMe } from '../../lib/auth';
-import { formatDate, formatDateTime, formatPhone } from '../../lib/format';
+import { formatDate, formatDateTime } from '../../lib/format-date';
+import { formatPhone } from '../../lib/format';
 import { RELATIONSHIP_LABELS } from './labels';
 import { PatientAppointments } from './PatientAppointments';
+import { PatientSummary } from './PatientSummary';
 
 const patientKey = (id: string) => ['patient', id] as const;
 
@@ -339,37 +341,44 @@ export function PatientPage() {
             )}
           </p>
         </div>
-        {can(me, 'patient.write') && (
-          <Button
-            variant={p.status === 'ACTIVE' ? 'danger' : 'secondary'}
-            disabled={toggleArchive.isPending}
-            onClick={() => {
-              if (
-                p.status === 'ACTIVE' &&
-                !window.confirm(
-                  'Archiver ce patient ? Il n’apparaîtra plus dans la liste des patients actifs.',
+        <div className="flex flex-wrap gap-2">
+          {can(me, 'appointment.write') && p.status === 'ACTIVE' && (
+            <Link
+              className="inline-flex min-h-11 items-center rounded-md bg-sky-700 px-4 text-sm font-medium text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700"
+              to={`/agenda?nouveau=1&patient=${p.id}`}
+            >
+              Prendre rendez-vous
+            </Link>
+          )}
+          {can(me, 'patient.write') && (
+            <Button
+              variant={p.status === 'ACTIVE' ? 'danger' : 'secondary'}
+              disabled={toggleArchive.isPending}
+              onClick={() => {
+                if (
+                  p.status === 'ACTIVE' &&
+                  !window.confirm(
+                    'Archiver ce patient ? Il n’apparaîtra plus dans la liste des patients actifs.',
+                  )
                 )
-              )
-                return;
-              toggleArchive.mutate(p);
-            }}
-          >
-            {p.status === 'ACTIVE' ? 'Archiver' : 'Restaurer'}
-          </Button>
-        )}
+                  return;
+                toggleArchive.mutate(p);
+              }}
+            >
+              {p.status === 'ACTIVE' ? 'Archiver' : 'Restaurer'}
+            </Button>
+          )}
+        </div>
       </div>
       {toggleArchive.isError && <Alert>{errorMessage(toggleArchive.error)}</Alert>}
-      <IdentitySection key={`${p.id}-${p.version}`} patient={p} editable={editable} />
-      <ContactsSection patient={p} editable={editable} />
-      {can(me, 'appointment.read') && (
-        <PatientAppointments
-          patientId={p.id}
-          canBook={can(me, 'appointment.write') && p.status === 'ACTIVE'}
-        />
-      )}
+      <PatientSummary patient={p} readsAgenda={can(me, 'appointment.read')} />
+      {/* Pour qui soigne, les notes médicales passent avant l'administratif (ADR 0008). */}
       {can(me, 'patient.medical.read') && (
         <MedicalNotesSection patientId={p.id} canWrite={can(me, 'patient.medical.write')} />
       )}
+      {can(me, 'appointment.read') && <PatientAppointments patientId={p.id} />}
+      <IdentitySection key={`${p.id}-${p.version}`} patient={p} editable={editable} />
+      <ContactsSection patient={p} editable={editable} />
     </section>
   );
 }

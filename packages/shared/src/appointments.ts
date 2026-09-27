@@ -48,9 +48,13 @@ export function findTransition(
   return APPOINTMENT_TRANSITIONS[from].find((t) => t.to === to);
 }
 
-/** Raisons pour lesquelles une confirmation explicite est exigée (tracées dans l'audit). */
-export const OVERRIDE_REASONS = ['OUTSIDE_WORKING_HOURS', 'ON_BLOCK'] as const;
-export type OverrideReason = (typeof OVERRIDE_REASONS)[number];
+/**
+ * Raisons pour lesquelles une confirmation explicite est exigée (tracées dans l'audit) :
+ * début déjà passé (ADR 0008), hors des horaires du praticien, sur un créneau bloqué.
+ */
+export const OVERRIDE_REASONS = ['IN_PAST', 'OUTSIDE_WORKING_HOURS', 'ON_BLOCK'] as const;
+export const overrideReasonSchema = z.enum(OVERRIDE_REASONS);
+export type OverrideReason = z.infer<typeof overrideReasonSchema>;
 
 export const MAX_APPOINTMENT_LIST_DAYS = 62;
 export const MIN_APPOINTMENT_MINUTES = 5;

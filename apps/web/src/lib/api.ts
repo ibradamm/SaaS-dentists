@@ -48,6 +48,7 @@ import {
   temporaryPasswordResponseSchema,
   type CreateUserRequest,
   type ErrorCode,
+  type OverrideReason,
   type LoginRequest,
   type MeResponse,
   type PasswordChangeRequest,
@@ -62,6 +63,8 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: ErrorCode,
     message: string,
+    /** Raisons d'une confirmation exigée (`AVAILABILITY_CONFIRMATION_REQUIRED`). */
+    readonly reasons: readonly OverrideReason[] = [],
   ) {
     super(message);
     this.name = 'ApiError';
@@ -97,7 +100,12 @@ async function request<T>(
   if (!response.ok) {
     const parsed = apiErrorSchema.safeParse(json);
     throw parsed.success
-      ? new ApiError(response.status, parsed.data.error.code, parsed.data.error.message)
+      ? new ApiError(
+          response.status,
+          parsed.data.error.code,
+          parsed.data.error.message,
+          parsed.data.error.reasons,
+        )
       : new ApiError(response.status, 'INTERNAL_ERROR', 'Erreur inattendue, réessayez.');
   }
   return schema.parse(json);

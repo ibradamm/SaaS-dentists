@@ -116,3 +116,10 @@ export function timeZones(): string[] {
     return ['Europe/Paris'];
   }
 }
+
+/** Âge en années révolues à la date `today` (dates locales AAAA-MM-JJ). */
+export function ageOn(birthDate: string, today: string): number {
+  const [by = 0, bm = 0, bd = 0] = birthDate.split('-').map(Number);
+  const [ty = 0, tm = 0, td = 0] = today.split('-').map(Number);
+  return ty - by - (tm < bm || (tm === bm && td < bd) ? 1 : 0);
+}

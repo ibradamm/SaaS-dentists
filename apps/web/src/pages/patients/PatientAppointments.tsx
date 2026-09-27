@@ -6,36 +6,31 @@ import { api, errorMessage } from '../../lib/api';
 import { formatDayLabel, formatTime, localDateOf } from '../../lib/dates';
 import { useNow } from '../../lib/hooks';
 import { APPOINTMENT_STATUS_LABELS, STATUS_TONES } from '../agenda/labels';
-import { CLINIC_QUERY_KEY } from '../settings/ClinicProfilePage';
-import { PRACTITIONERS_KEY } from '../settings/PractitionersPage';
+import { useAllPractitioners, useClinic } from '../../lib/queries';
 
-const linkButton =
-  'inline-flex min-h-11 items-center rounded-md bg-sky-700 px-4 text-sm font-medium text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700';
-
-/** Rendez-vous du patient : à venir, puis historique (tous statuts), en heure du cabinet. */
-export function PatientAppointments({
-  patientId,
-  canBook,
-}: {
-  patientId: string;
-  canBook: boolean;
-}) {
-  const clinic = useQuery({ queryKey: CLINIC_QUERY_KEY, queryFn: api.clinic });
-  const practitioners = useQuery({
-    queryKey: [...PRACTITIONERS_KEY, 'all'],
-    queryFn: () => api.listPractitioners(true),
-  });
-  const appointments = useQuery({
+/** Rendez-vous d'un patient (historique complet, du plus récent au plus ancien). */
+export const usePatientAppointments = (patientId: string) =>
+  useQuery({
     queryKey: ['patient-appointments', patientId],
     queryFn: () => api.patientAppointments(patientId),
   });
 
+/** Rendez-vous « prévus » non terminés, du plus proche au plus lointain. */
+export function upcomingOf(list: readonly Appointment[], now: number): Appointment[] {
+  return list
+    .filter((a) => a.status === 'SCHEDULED' && new Date(a.endAt).getTime() > now)
+    .sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt));
+}
+
+/** Rendez-vous du patient : à venir, puis historique (tous statuts), en heure du cabinet. */
+export function PatientAppointments({ patientId }: { patientId: string }) {
+  const clinic = useClinic();
+  const practitioners = useAllPractitioners();
+  const appointments = usePatientAppointments(patientId);
+
   const now = useNow();
   const list = appointments.data ?? [];
-  // Réponse du plus récent au plus ancien : les rendez-vous à venir sont remis dans l'ordre.
-  const upcoming = list
-    .filter((a) => a.status === 'SCHEDULED' && new Date(a.endAt).getTime() > now)
-    .reverse();
+  const upcoming = upcomingOf(list, now);
   const past = list.filter((a) => !upcoming.includes(a));
 
   const item = (a: Appointment, timeZone: string) => {
@@ -63,11 +58,6 @@ export function PatientAppointments({
     <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Rendez-vous</h2>
-        {canBook && (
-          <Link className={linkButton} to={`/agenda?nouveau=1&patient=${patientId}`}>
-            Prendre rendez-vous
-          </Link>
-        )}
       </div>
       {(appointments.isPending || clinic.isPending) && <Loading />}
       {appointments.isError && <Alert>{errorMessage(appointments.error)}</Alert>}

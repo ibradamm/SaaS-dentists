@@ -6,8 +6,7 @@ import { api, errorMessage } from '../../lib/api';
 import { ME_QUERY_KEY } from '../../lib/auth';
 import { timeZones } from '../../lib/dates';
 import { formatPhone } from '../../lib/format';
-
-export const CLINIC_QUERY_KEY = ['clinic'] as const;
+import { CLINIC_QUERY_KEY } from '../../lib/queries';
 
 const FIELDS = [
   'name',

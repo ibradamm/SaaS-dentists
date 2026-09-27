@@ -386,8 +386,8 @@ describe('rendez-vous', () => {
         cancellationReason: {},
       });
       expect(JSON.stringify(statusAudit)).not.toContain('Empêchement');
-      // Le créneau annulé est libre.
-      await book(await newPatient(), '2026-09-28T14:00');
+      // Le créneau annulé est libre (il est 14 h 05 : confirmation « dans le passé » exigée).
+      await book(await newPatient(), '2026-09-28T14:00', { allowOutsideAvailability: true });
     });
 
     it('« patient absent » libère le créneau ; revenir à « prévu » est refusé s’il a été repris', async () => {
@@ -611,6 +611,80 @@ describe('rendez-vous', () => {
           .where(and(eq(appointments.clinicId, clinic.id), eq(appointments.id, a.id))),
       );
       expect(row?.status).toBe('SCHEDULED');
+    });
+  });
+
+  describe('rendez-vous dans le passé (ADR 0008)', () => {
+    // Horloge propre à ces tests : mardi 29 septembre, 14 h 05 à Paris.
+    const past = createAppointmentsService({
+      db: t.appDb,
+      now: () => new Date('2026-09-29T12:05:00Z'),
+    });
+    const bookAt = (patientId: string, start: string, extra: object = {}) =>
+      past.create(
+        secretary,
+        { practitionerId: drA, patientId, appointmentTypeId: consultation, start, ...extra },
+        META,
+      );
+
+    it('création : confirmation exigée avec la raison « dans le passé », puis tracée', async () => {
+      const patient = await newPatient();
+      // 14 h, dans les horaires : seule raison, le passé (même 5 minutes avant).
+      await expect(bookAt(patient, '2026-09-29T14:00')).rejects.toMatchObject({
+        code: 'AVAILABILITY_CONFIRMATION_REQUIRED',
+        reasons: ['IN_PAST'],
+        message: expect.stringContaining('dans le passé') as string,
+      });
+      // 13 h : dans le passé et hors horaires.
+      await expect(bookAt(patient, '2026-09-29T13:00')).rejects.toMatchObject({
+        reasons: ['IN_PAST', 'OUTSIDE_WORKING_HOURS'],
+      });
+      const forced = await bookAt(patient, '2026-09-29T14:00', { allowOutsideAvailability: true });
+      const override = (await auditFor(forced.id)).find(
+        (e) => e.action === 'appointment.availability_override',
+      );
+      expect(override?.changes).toMatchObject({ reasons: { to: 'IN_PAST' } });
+      // À venir (14 h 30) : aucune confirmation.
+      await bookAt(await newPatient(), '2026-09-29T14:30');
+    });
+
+    it('déplacement vers le passé : confirmation exigée ; absence passée : refus sans dérogation', async () => {
+      const a = await bookAt(await newPatient(), '2026-09-29T16:00');
+      await expect(
+        past.update(secretary, a.id, { version: a.version, start: '2026-09-29T11:00' }, META),
+      ).rejects.toMatchObject({ reasons: ['IN_PAST'] });
+      const moved = await past.update(
+        secretary,
+        a.id,
+        { version: a.version, start: '2026-09-29T11:00', allowOutsideAvailability: true },
+        META,
+      );
+      expect(moved.startAt).toBe('2026-09-29T09:00:00.000Z');
+      await schedules.createBlock(
+        secretary,
+        {
+          practitionerId: drB,
+          kind: 'ABSENCE',
+          allDay: false,
+          start: '2026-09-29T10:00',
+          end: '2026-09-29T11:00',
+          label: null,
+        },
+        META,
+      );
+      await expect(
+        past.create(
+          secretary,
+          {
+            practitionerId: drB,
+            patientId: await newPatient(),
+            appointmentTypeId: consultation,
+            start: '2026-09-29T10:15',
+            allowOutsideAvailability: true,
+          },
+          META,
+        ),
+      ).rejects.toMatchObject({ code: 'PRACTITIONER_ABSENT' });
     });
   });
 });

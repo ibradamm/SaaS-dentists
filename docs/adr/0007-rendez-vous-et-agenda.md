@@ -1,6 +1,6 @@
 # ADR 0007 — Rendez-vous et agenda
 
-- Statut : accepté (2026-09-26), analyse préalable à la Phase 5 ; mis en œuvre (rapport : `docs/phases/phase-5.md`)
+- Statut : accepté (2026-09-26), analyse préalable à la Phase 5 ; mis en œuvre (rapport : `docs/phases/phase-5.md`). Complété par l'ADR 0008 : raison de dérogation « dans le passé » (`IN_PAST`) et raisons renvoyées dans la réponse d'erreur.
 - Décisions du porteur du projet :
   1. un rendez-vous hors horaires ou sur un créneau bloqué exige une confirmation explicite, tracée dans l'audit ;
   2. aucun rendez-vous pendant une absence ;

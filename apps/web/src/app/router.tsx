@@ -1,23 +1,22 @@
+import type { ComponentType } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { ChangePasswordPage } from '../pages/ChangePasswordPage';
-import { HomePage } from '../pages/HomePage';
 import { LoginPage } from '../pages/LoginPage';
 import { MfaVerifyPage } from '../pages/MfaVerifyPage';
-import { UsersPage } from '../pages/UsersPage';
-import { NewPatientPage } from '../pages/patients/NewPatientPage';
-import { PatientPage } from '../pages/patients/PatientPage';
-import { PatientsPage } from '../pages/patients/PatientsPage';
-import { AgendaPage } from '../pages/agenda/AgendaPage';
-import { AvailabilityPage } from '../pages/availability/AvailabilityPage';
-import { AppointmentTypesPage } from '../pages/settings/AppointmentTypesPage';
-import { ClinicProfilePage } from '../pages/settings/ClinicProfilePage';
-import { PractitionersPage } from '../pages/settings/PractitionersPage';
-import { SettingsLayout } from '../pages/settings/SettingsLayout';
-import { AppLayout } from './AppLayout';
+import { AppLayout, type RouteHandle } from './AppLayout';
 import { RequirePermission, RequireSession } from './guards';
 
+/*
+ * Pages de l'application chargées à la demande : la connexion ne télécharge que le socle
+ * (React, routeur, cache, contrats), et chaque page arrive avec ses bibliothèques (ADR 0008).
+ */
+const page = (title: string, load: () => Promise<{ Component: ComponentType }>) => ({
+  handle: { title } satisfies RouteHandle,
+  lazy: load,
+});
+
 export const routes: RouteObject[] = [
-  { path: '/connexion', element: <LoginPage /> },
+  { path: '/connexion', element: <LoginPage />, handle: { title: 'Connexion' } },
   {
     element: <RequireSession allow="MFA_PENDING" />,
     children: [{ path: '/connexion/code', element: <MfaVerifyPage /> }],
@@ -42,27 +41,74 @@ export const routes: RouteObject[] = [
       {
         element: <AppLayout />,
         children: [
-          { index: true, element: <HomePage /> },
+          {
+            index: true,
+            ...page("Aujourd'hui", () =>
+              import('../pages/today/TodayPage').then((m) => ({ Component: m.TodayPage })),
+            ),
+          },
           {
             element: <RequirePermission permission="user.manage" />,
-            children: [{ path: '/utilisateurs', element: <UsersPage /> }],
+            children: [
+              {
+                path: '/utilisateurs',
+                ...page('Utilisateurs', () =>
+                  import('../pages/UsersPage').then((m) => ({ Component: m.UsersPage })),
+                ),
+              },
+            ],
           },
           {
             element: <RequirePermission permission="patient.read" />,
             children: [
-              { path: '/patients', element: <PatientsPage /> },
-              { path: '/patients/:id', element: <PatientPage /> },
+              {
+                path: '/patients',
+                ...page('Patients', () =>
+                  import('../pages/patients/PatientsPage').then((m) => ({
+                    Component: m.PatientsPage,
+                  })),
+                ),
+              },
+              {
+                path: '/patients/:id',
+                ...page('Fiche patient', () =>
+                  import('../pages/patients/PatientPage').then((m) => ({
+                    Component: m.PatientPage,
+                  })),
+                ),
+              },
             ],
           },
           {
             element: <RequirePermission permission="patient.write" />,
-            children: [{ path: '/patients/nouveau', element: <NewPatientPage /> }],
+            children: [
+              {
+                path: '/patients/nouveau',
+                ...page('Nouveau patient', () =>
+                  import('../pages/patients/NewPatientPage').then((m) => ({
+                    Component: m.NewPatientPage,
+                  })),
+                ),
+              },
+            ],
           },
           {
             element: <RequirePermission permission="appointment.read" />,
             children: [
-              { path: '/agenda', element: <AgendaPage /> },
-              { path: '/disponibilites', element: <AvailabilityPage /> },
+              {
+                path: '/agenda',
+                ...page('Agenda', () =>
+                  import('../pages/agenda/AgendaPage').then((m) => ({ Component: m.AgendaPage })),
+                ),
+              },
+              {
+                path: '/disponibilites',
+                ...page('Disponibilités', () =>
+                  import('../pages/availability/AvailabilityPage').then((m) => ({
+                    Component: m.AvailabilityPage,
+                  })),
+                ),
+              },
             ],
           },
           {
@@ -70,11 +116,35 @@ export const routes: RouteObject[] = [
             children: [
               {
                 path: '/cabinet',
-                element: <SettingsLayout />,
+                ...page('Cabinet', () =>
+                  import('../pages/settings/SettingsLayout').then((m) => ({
+                    Component: m.SettingsLayout,
+                  })),
+                ),
                 children: [
-                  { index: true, element: <ClinicProfilePage /> },
-                  { path: 'praticiens', element: <PractitionersPage /> },
-                  { path: 'types-de-rendez-vous', element: <AppointmentTypesPage /> },
+                  {
+                    index: true,
+                    lazy: () =>
+                      import('../pages/settings/ClinicProfilePage').then((m) => ({
+                        Component: m.ClinicProfilePage,
+                      })),
+                  },
+                  {
+                    path: 'praticiens',
+                    ...page('Praticiens', () =>
+                      import('../pages/settings/PractitionersPage').then((m) => ({
+                        Component: m.PractitionersPage,
+                      })),
+                    ),
+                  },
+                  {
+                    path: 'types-de-rendez-vous',
+                    ...page('Types de rendez-vous', () =>
+                      import('../pages/settings/AppointmentTypesPage').then((m) => ({
+                        Component: m.AppointmentTypesPage,
+                      })),
+                    ),
+                  },
                 ],
               },
             ],
@@ -84,8 +154,9 @@ export const routes: RouteObject[] = [
             children: [
               {
                 path: '/patients/import',
-                lazy: () =>
+                ...page('Import de patients', () =>
                   import('../pages/imports/ImportPage').then((m) => ({ Component: m.ImportPage })),
+                ),
               },
             ],
           },

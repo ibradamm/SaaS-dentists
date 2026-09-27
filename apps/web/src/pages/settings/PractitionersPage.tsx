@@ -5,8 +5,7 @@ import { Alert, Badge, Button, Loading, SelectField, TextField } from '../../com
 import { api, errorMessage } from '../../lib/api';
 import { useMe } from '../../lib/auth';
 import { COLORS, ColorField, ColorSwatch } from './colors';
-
-export const PRACTITIONERS_KEY = ['practitioners'] as const;
+import { PRACTITIONERS_KEY } from '../../lib/queries';
 
 interface FormValues {
   displayName: string;

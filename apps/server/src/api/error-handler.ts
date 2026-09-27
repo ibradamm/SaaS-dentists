@@ -1,10 +1,23 @@
-import type { ApiError, ErrorCode } from '@dental/shared';
+import type { ApiError, ErrorCode, OverrideReason } from '@dental/shared';
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 import { AppError } from '../lib/errors';
 
-function send(reply: FastifyReply, status: number, code: ErrorCode, message: string) {
-  const body: ApiError = { error: { code, message, requestId: String(reply.request.id) } };
+function send(
+  reply: FastifyReply,
+  status: number,
+  code: ErrorCode,
+  message: string,
+  reasons?: readonly OverrideReason[],
+) {
+  const body: ApiError = {
+    error: {
+      code,
+      message,
+      requestId: String(reply.request.id),
+      ...(reasons ? { reasons: [...reasons] } : {}),
+    },
+  };
   return reply.status(status).send(body);
 }
 
@@ -14,7 +27,7 @@ function send(reply: FastifyReply, status: number, code: ErrorCode, message: str
  */
 export function errorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
   if (error instanceof AppError) {
-    return send(reply, error.statusCode, error.code, error.message);
+    return send(reply, error.statusCode, error.code, error.message, error.reasons);
   }
   if (error instanceof ZodError || error.validation) {
     return send(reply, 400, 'VALIDATION_FAILED', 'Requête invalide');

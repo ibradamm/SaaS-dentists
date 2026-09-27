@@ -5,23 +5,22 @@ import { Link, useSearchParams } from 'react-router';
 import { Alert, Button, Loading, SelectField, TextField } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
 import { can, useMe } from '../../lib/auth';
-import { useNow } from '../../lib/hooks';
+import { PHONE_QUERY, useMediaQuery, useNow } from '../../lib/hooks';
 import {
   addDays,
   formatDayLabel,
-  formatLocalDate,
   formatMinutes,
   localDateOf,
   localDateTimeOf,
   startOfWeek,
   todayIn,
 } from '../../lib/dates';
-import { APPOINTMENT_TYPES_KEY } from '../settings/AppointmentTypesPage';
-import { CLINIC_QUERY_KEY } from '../settings/ClinicProfilePage';
-import { PRACTITIONERS_KEY } from '../settings/PractitionersPage';
+import { useAllAppointmentTypes, useAllPractitioners, useClinic } from '../../lib/queries';
 import { ColorSwatch } from '../settings/colors';
 import { AgendaGrid, type AgendaColumn } from './AgendaGrid';
-import { AppointmentDetails, refreshAgenda } from './AppointmentDetails';
+import { AppointmentDetails } from './AppointmentDetails';
+import { AppointmentList } from './AppointmentList';
+import { refreshAgenda } from './refresh';
 import { AppointmentForm, type CreateDefaults } from './AppointmentForm';
 
 type View = 'day' | 'week';
@@ -46,15 +45,10 @@ export function AgendaPage() {
   const { data: me } = useMe();
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const clinic = useQuery({ queryKey: CLINIC_QUERY_KEY, queryFn: api.clinic });
-  const practitioners = useQuery({
-    queryKey: [...PRACTITIONERS_KEY, 'all'],
-    queryFn: () => api.listPractitioners(true),
-  });
-  const types = useQuery({
-    queryKey: [...APPOINTMENT_TYPES_KEY, 'all'],
-    queryFn: () => api.listAppointmentTypes(true),
-  });
+  const clinic = useClinic();
+  const practitioners = useAllPractitioners();
+  const types = useAllAppointmentTypes();
+  const phone = useMediaQuery(PHONE_QUERY);
   // Liens directs : ?rdv=<id> ouvre un rendez-vous ; ?nouveau=1&patient=<id> en prépare un.
   const [panel, setPanel] = useState<Panel>(() => {
     const id = params.get('rdv');
@@ -76,11 +70,15 @@ export function AgendaPage() {
 
   const timeZone = clinic.data?.timezone ?? 'UTC';
   const today = todayIn(timeZone);
-  const view: View = params.get('vue') === 'semaine' ? 'week' : 'day';
   const date = validDate(params.get('date')) ?? today;
   const all = practitioners.data ?? [];
   const active = all.filter((p) => p.status === 'ACTIVE');
   const own = active.find((p) => p.userId === me?.user.id);
+  // Vue par défaut (ADR 0008) : sa semaine pour un compte lié à un praticien, sinon la
+  // journée de tout le cabinet.
+  const requested = params.get('vue');
+  const view: View =
+    requested === 'semaine' ? 'week' : requested === 'jour' ? 'day' : own ? 'week' : 'day';
   const weekPractitioner =
     all.find((p) => p.id === params.get('praticien')) ?? own ?? active[0] ?? null;
   const from = view === 'day' ? date : startOfWeek(date);
@@ -100,12 +98,20 @@ export function AgendaPage() {
     enabled: ready,
   });
 
+  // Adresse la plus récente, y compris un changement pas encore rendu : deux changements
+  // rapprochés (vue puis date) s'enchaînent au lieu que le second efface le premier. La forme
+  // fonctionnelle de setParams ne suffit pas : elle reçoit l'adresse du dernier rendu.
+  const latest = useRef(params);
+  useEffect(() => {
+    latest.current = params;
+  }, [params]);
   const update = (patch: Record<string, string | null>) => {
-    const next = new URLSearchParams(params);
+    const next = new URLSearchParams(latest.current);
     for (const [k, v] of Object.entries(patch)) {
       if (v === null) next.delete(k);
       else next.set(k, v);
     }
+    latest.current = next;
     setParams(next, { replace: true });
   };
   const open = (next: Panel) => {
@@ -155,9 +161,14 @@ export function AgendaPage() {
     (p) =>
       p.status === 'ACTIVE' || appointments.data?.some((a) => a.practitionerId === p.id) === true,
   );
+  // Téléphone : un praticien à la fois en vue jour (celui choisi, sinon le sien).
+  const shownPractitioners =
+    phone && dayPractitioners.length > 1
+      ? dayPractitioners.filter((p) => p.id === weekPractitioner?.id)
+      : dayPractitioners;
   const columns: AgendaColumn[] =
     view === 'day'
-      ? dayPractitioners.map((p) => ({
+      ? shownPractitioners.map((p) => ({
           key: p.id,
           day: date,
           practitionerId: p.id,
@@ -230,7 +241,7 @@ export function AgendaPage() {
               key={v}
               type="button"
               aria-pressed={view === v}
-              onClick={() => update({ vue: v === 'week' ? 'semaine' : null })}
+              onClick={() => update({ vue: v === 'week' ? 'semaine' : 'jour' })}
               className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 aria-pressed:bg-sky-100 aria-pressed:text-sky-900"
             >
               {label}
@@ -260,7 +271,7 @@ export function AgendaPage() {
             onChange={(e) => validDate(e.target.value) && update({ date: e.target.value })}
           />
         </div>
-        {view === 'week' && active.length > 1 && (
+        {(view === 'week' || phone) && active.length > 1 && (
           <div className="min-w-56">
             <SelectField
               label="Agenda de"
@@ -295,34 +306,45 @@ export function AgendaPage() {
           {(appointments.isPending || availability.isPending) && <Loading />}
           {appointments.isError && <Alert>{errorMessage(appointments.error)}</Alert>}
           {availability.isError && <Alert>{errorMessage(availability.error)}</Alert>}
-          {appointments.data && availability.data && (
-            <>
-              <AgendaGrid
-                columns={columns}
+          {appointments.data &&
+            availability.data &&
+            (phone && view === 'week' ? (
+              <WeekList
+                days={columns.map((c) => c.day)}
                 appointments={appointments.data}
-                availability={availability.data}
+                practitioners={all}
                 timeZone={timeZone}
-                nowMinutes={nowMinutes}
-                onSelect={(id) => open({ kind: 'view', id })}
-                onSlot={
-                  canWrite && !noTypes
-                    ? (column, minute) =>
-                        open({
-                          kind: 'create',
-                          practitionerId: column.practitionerId,
-                          date: column.day,
-                          time: formatMinutes(minute),
-                          patientId: null,
-                        })
-                    : null
-                }
+                now={now}
+                canWrite={canWrite}
               />
-              <p className="mt-1 text-xs text-slate-600">
-                Heures du cabinet ({timeZone}). En blanc : horaires de travail ; hachuré : absences
-                et créneaux bloqués.
-              </p>
-            </>
-          )}
+            ) : (
+              <>
+                <AgendaGrid
+                  columns={columns}
+                  appointments={appointments.data}
+                  availability={availability.data}
+                  timeZone={timeZone}
+                  nowMinutes={nowMinutes}
+                  onSelect={(id) => open({ kind: 'view', id })}
+                  onSlot={
+                    canWrite && !noTypes
+                      ? (column, minute) =>
+                          open({
+                            kind: 'create',
+                            practitionerId: column.practitionerId,
+                            date: column.day,
+                            time: formatMinutes(minute),
+                            patientId: null,
+                          })
+                      : null
+                  }
+                />
+                <p className="mt-1 text-xs text-slate-600">
+                  Heures du cabinet ({timeZone}). En blanc : horaires de travail ; hachuré :
+                  absences et créneaux bloqués.
+                </p>
+              </>
+            ))}
         </div>
         {panel && (
           <SidePanel
@@ -349,6 +371,7 @@ export function AgendaPage() {
                   time: panel.time,
                 }}
                 patientId={panel.patientId}
+                canCreatePatient={can(me, 'patient.write')}
                 practitioners={all}
                 types={types.data}
                 timeZone={timeZone}
@@ -375,12 +398,25 @@ function SidePanel({
   children: ReactNode;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
+  // Élément qui a ouvert le panneau, lu au premier rendu : avant que le titre ne prenne le
+  // focus. À la fermeture, le focus lui revient (clavier et lecteur d'écran).
+  const [opener] = useState(() => document.activeElement);
+  useEffect(
+    () => () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    },
+    [opener],
+  );
   // Focus sur le titre à l'ouverture : le lecteur d'écran annonce le panneau.
   useEffect(() => heading.current?.focus(), [title]);
   return (
     <aside
       aria-labelledby="agenda-panel-title"
-      className="flex flex-col gap-3 self-start rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
+      // Tablette et téléphone : plein écran, au-dessus de la grille ; ordinateur : colonne.
+      className="fixed inset-0 z-30 flex flex-col gap-3 overflow-y-auto bg-white p-4 lg:static lg:inset-auto lg:z-auto lg:self-start lg:rounded-lg lg:border lg:border-slate-200 lg:shadow-sm"
     >
       <div className="flex items-center justify-between gap-2">
         <h2 id="agenda-panel-title" ref={heading} tabIndex={-1} className="text-lg font-semibold">
@@ -395,6 +431,50 @@ function SidePanel({
   );
 }
 
+/** Semaine sur téléphone : une liste par jour plutôt qu'une grille de sept colonnes. */
+function WeekList({
+  days,
+  appointments,
+  ...rest
+}: {
+  days: string[];
+  appointments: Appointment[];
+  practitioners: Practitioner[];
+  timeZone: string;
+  now: number;
+  canWrite: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      {days.map((day) => {
+        const items = appointments.filter((a) => localDateOf(a.startAt, rest.timeZone) === day);
+        const label = formatDayLabel(day);
+        return (
+          <section
+            key={day}
+            aria-label={label}
+            className="overflow-hidden rounded-lg border border-slate-200 bg-white"
+          >
+            <h3 className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold first-letter:uppercase">
+              {label}
+            </h3>
+            {items.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-slate-600">Aucun rendez-vous.</p>
+            ) : (
+              <AppointmentList
+                appointments={items}
+                showPractitioner={false}
+                label={`Rendez-vous du ${label}`}
+                {...rest}
+              />
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Formulaire de création ; le patient d'un lien direct est chargé avant l'affichage. */
 function CreatePanel({
   defaults,
@@ -403,6 +483,7 @@ function CreatePanel({
 }: {
   defaults: Omit<CreateDefaults, 'patient'>;
   patientId: string | null;
+  canCreatePatient: boolean;
   practitioners: Practitioner[];
   types: AppointmentType[];
   timeZone: string;
@@ -419,11 +500,6 @@ function CreatePanel({
   const preselected: PatientSummary | null =
     patient.data && patient.data.status === 'ACTIVE' ? patient.data : null;
   return (
-    <>
-      <p className="text-sm text-slate-600">
-        {formatLocalDate(defaults.date)} à {defaults.time}, modifiable ci-dessous.
-      </p>
-      <AppointmentForm mode="create" defaults={{ ...defaults, patient: preselected }} {...rest} />
-    </>
+    <AppointmentForm mode="create" defaults={{ ...defaults, patient: preselected }} {...rest} />
   );
 }

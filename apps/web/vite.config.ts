@@ -6,6 +6,8 @@ const apiTarget = process.env.VITE_DEV_API_URL ?? 'http://127.0.0.1:3000';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Manifeste lu par scripts/check-bundle.mjs (budget du chargement initial).
+  build: { manifest: true },
   server: {
     host: '127.0.0.1',
     port: 5173,

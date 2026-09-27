@@ -15,6 +15,7 @@
     "dev:worker": "pnpm --filter @dental/server dev:worker",
     "dev:web": "pnpm --filter @dental/web dev",
     "build": "pnpm -r build",
+    "check:bundle": "pnpm --filter @dental/web check:bundle",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

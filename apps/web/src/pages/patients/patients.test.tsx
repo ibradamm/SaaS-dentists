@@ -87,7 +87,7 @@ describe('liste des patients', () => {
     // L'import est réservé à l'administrateur.
     expect(screen.queryByRole('link', { name: 'Importer un fichier' })).not.toBeInTheDocument();
 
-    fill(/Rechercher/, ' dup ');
+    fill(/Rechercher \(nom/, ' dup ');
     await waitFor(() =>
       expect(calls.some((c) => c.url.startsWith('/api/patients?') && c.url.includes('q=dup'))).toBe(
         true,
@@ -403,6 +403,54 @@ describe('rendez-vous du patient', () => {
       'href',
       `/agenda?nouveau=1&patient=${PATIENT_ID}`,
     );
+  });
+
+  it('résumé en tête : téléphone cliquable, âge, prochain rendez-vous', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-28T08:00:00Z'));
+    mockApi({
+      ...session('SECRETARY', [
+        appointment({
+          id: '01a0de00-0000-7000-8000-00000000f003',
+          startAt: '2026-10-12T07:00:00.000Z',
+          endAt: '2026-10-12T07:30:00.000Z',
+        }),
+        appointment({}),
+      ]),
+      [`GET /api/patients/${PATIENT_ID}`]: () => ({ status: 200, body: detail() }),
+    });
+    renderApp(`/patients/${PATIENT_ID}`);
+    const phone = await screen.findByRole('link', { name: '06 12 34 56 78' });
+    expect(phone).toHaveAttribute('href', 'tel:+33612345678');
+    expect(await screen.findByText('12/03/1985 (41 ans)')).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'lundi 5 octobre à 09:00' })).toHaveAttribute(
+      'href',
+      '/agenda?date=2026-10-05&rdv=01a0de00-0000-7000-8000-00000000f001',
+    );
+  });
+
+  it('ordre des sections selon le rôle : notes médicales en premier pour le dentiste', async () => {
+    const order = () =>
+      screen
+        .getAllByRole('heading', { level: 2 })
+        .map((h) => h.textContent)
+        .filter((t) => t !== null);
+    mockApi({
+      ...session('DENTIST'),
+      [`GET /api/patients/${PATIENT_ID}`]: () => ({ status: 200, body: detail() }),
+      [`GET /api/patients/${PATIENT_ID}/medical-notes`]: () => ({
+        status: 200,
+        body: { notes: [] },
+      }),
+    });
+    renderApp(`/patients/${PATIENT_ID}`);
+    await screen.findByRole('heading', { name: 'Notes médicales' });
+    expect(order()).toEqual([
+      'Notes médicales',
+      'Rendez-vous',
+      'Identité et coordonnées',
+      'Téléphones',
+    ]);
   });
 
   it('patient archivé : historique visible, pas de prise de rendez-vous', async () => {

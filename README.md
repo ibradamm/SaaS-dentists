@@ -12,7 +12,8 @@ Fonctionnalités disponibles :
 - dossiers patients : recherche, doublons, téléphones, archivage, notes médicales restreintes et chiffrées ;
 - import de patients depuis un fichier CSV ou Excel (menu Patients → « Importer un fichier », administrateur ; voir ADR 0005) ;
 - cabinet (profil, praticiens, types de rendez-vous) et disponibilités par praticien : horaires datés, absences, blocages, dans le fuseau du cabinet (ADR 0006) ;
-- agenda des rendez-vous (menu « Agenda ») : vues jour et semaine, création avec créneaux libres proposés, déplacement, statuts (prévu, honoré, patient absent, annulé), historique sur la fiche patient ; double réservation impossible, y compris en base ; hors horaires seulement après confirmation explicite, tracée (ADR 0007).
+- agenda des rendez-vous (menu « Agenda ») : vues jour et semaine, création avec créneaux libres proposés, déplacement, statuts (prévu, honoré, patient absent, annulé), historique sur la fiche patient ; double réservation impossible, y compris en base ; hors horaires, sur un blocage ou dans le passé seulement après confirmation explicite, tracée (ADR 0007, 0008) ;
+- parcours par rôle (ADR 0008) : accueil « Aujourd'hui » (« Ma journée » pour un praticien, journée du cabinet pour le secrétariat, mise en route pour l'administrateur), recherche rapide de patient, création d'un patient pendant la prise de rendez-vous ; interface adaptée à l'ordinateur, à la tablette et au téléphone.
 
 Architecture et décisions : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/adr/`](docs/adr). Avancement : [`docs/phases/`](docs/phases).
 
@@ -53,7 +54,7 @@ pnpm admin:reset-mfa --email admin@cabinet.fr   # perte du téléphone du seul a
 ## Vérifications (identiques à la CI)
 
 ```bash
-pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build
+pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check:bundle
 ```
 
 - Les tests d'intégration créent une base jetable, y appliquent toutes les migrations et se connectent avec le rôle applicatif réel (RLS active).

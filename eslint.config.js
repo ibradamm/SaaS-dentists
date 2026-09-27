@@ -20,7 +20,12 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.js', 'apps/server/scripts/*.mjs', 'scripts/*.mjs'],
+          allowDefaultProject: [
+            'eslint.config.js',
+            'apps/server/scripts/*.mjs',
+            'apps/web/scripts/*.mjs',
+            'scripts/*.mjs',
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -40,7 +45,7 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
-    files: ['apps/server/**', 'scripts/**', 'eslint.config.js'],
+    files: ['apps/server/**', 'apps/web/scripts/**', 'scripts/**', 'eslint.config.js'],
     languageOptions: { globals: globals.node },
   },
   {
@@ -97,7 +102,12 @@ export default tseslint.config(
   },
   {
     // Les CLI d'exploitation écrivent sur la sortie standard.
-    files: ['apps/server/src/db/cli/**', 'apps/server/scripts/**', 'scripts/**'],
+    files: [
+      'apps/server/src/db/cli/**',
+      'apps/server/scripts/**',
+      'apps/web/scripts/**',
+      'scripts/**',
+    ],
     rules: { 'no-console': 'off' },
   },
   prettier,

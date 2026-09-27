@@ -126,7 +126,7 @@ Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, 
 | Dates et fuseaux | Luxon (serveur) ; `Intl` dans l'interface pour l'affichage dans le fuseau du cabinet | Fuseaux IANA, changements d'heure (ADR 0006) |
 | Graphiques (Phase 8) | Recharts | Intégration React |
 | Tests | Vitest, Testing Library, Playwright (E2E en Phase 10) | |
-| Qualité | ESLint (règles de frontières), Prettier, gitleaks, `pnpm audit` en CI | |
+| Qualité | ESLint (règles de frontières), Prettier, gitleaks, `pnpm audit` en CI, budget du chargement initial de l'interface (`pnpm check:bundle`) | |
 | Déploiement (Phase 11) | Conteneurs, Caddy (TLS automatique), PostgreSQL managé avec restauration à un instant donné | |
 
 ---
@@ -141,7 +141,8 @@ apps/server/src/
   jobs/          file de tâches (pg-boss), gestionnaires
   lib/           erreurs, chiffrement, métadonnées de requête
   modules/       audit, auth, users, clinic, patients, imports, scheduling, appointments (puis finance…)
-apps/web/src/    app (routeur, gardes), pages, composants, lib (client API, auth)
+apps/web/src/    app (routeur, en-tête, gardes), pages (today, agenda, patients, availability, settings…),
+                 composants, lib (client API, cache, auth, dates)
 packages/shared/ contrats Zod, catalogue des permissions
 infra/           docker-compose de développement
 scripts/         PostgreSQL local, initialisation du .env
@@ -230,6 +231,7 @@ Double authentification obligatoire pour ADMIN et DENTIST.
 | Validation | Zod sur chaque entrée ; requêtes paramétrées uniquement |
 | Données sensibles | Notes médicales et secrets TOTP chiffrés (AES-256-GCM), clé hors base ; lecture des notes médicales auditée |
 | Secrets | Variables d'environnement et gestionnaire de secrets ; gitleaks en CI ; `.env` exclu de Git |
+| Interface | Pages chargées à la demande ; cache des requêtes vidé à tout changement de session (compte, cabinet, expiration) et retour à la connexion sur une réponse 401 (ADR 0008) |
 | Logs et audit | Aucune donnée patient dans les logs (chemin des requêtes sans chaîne de requête, corps masqués) ; l'audit ne recopie pas les valeurs modifiées (noms de champs seulement) |
 | Sauvegardes | PostgreSQL managé avec restauration à un instant donné ; test de restauration documenté (Phase 11) |
 
@@ -257,8 +259,8 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | 2 | Authentification, rôles, permissions, utilisateurs, paramètres minimaux du cabinet | 3, 4, 6 | Fait |
 | 3 | Patients : dossier administratif, contacts, notes médicales restreintes, recherche, doublons, **import CSV / Excel** | 7 | Fait |
 | 4 | Cabinet et disponibilités : profil du cabinet, praticiens (un ou plusieurs), types de rendez-vous, horaires hebdomadaires datés, absences et blocages, calcul des disponibilités (pas de table d'horaires d'ouverture, ADR 0006) | 5, 10, 11 | Fait |
-| 5 | Rendez-vous et agenda : création, déplacement, annulation, statuts, anti double réservation, vues jour et semaine, historique patient (ADR 0007) | 8, 9 | Fait (en attente de validation) |
-| 6 | Applications web dentiste et secrétaire : parcours quotidiens par rôle, ergonomie, accessibilité, téléphone et tablette | 12, 13 | À faire |
+| 5 | Rendez-vous et agenda : création, déplacement, annulation, statuts, anti double réservation, vues jour et semaine, historique patient (ADR 0007) | 8, 9 | Fait |
+| 6 | Applications web dentiste et secrétaire : parcours quotidiens par rôle, ergonomie, accessibilité, téléphone et tablette (ADR 0008) | 12, 13 | Fait (en attente de validation) |
 | 7 | Paiements et revenus encaissés : actes à encaisser, paiements, annulations, impayés, périodes | 14 | À faire |
 | 8 | Tableau de bord et statistiques | 15, 16 | À faire |
 | 9 | Journal d'audit consultable et audit de sécurité : revue OWASP ASVS, purges, rétention, procédure d'effacement | 17, 18 | À faire |

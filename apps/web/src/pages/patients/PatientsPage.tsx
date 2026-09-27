@@ -1,10 +1,11 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Alert, Badge, Loading, SelectField, TextField } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
 import { can, useMe } from '../../lib/auth';
-import { formatDate, formatPhone } from '../../lib/format';
+import { formatDate } from '../../lib/format-date';
+import { formatPhone } from '../../lib/format';
 import { useDebounced } from '../../lib/hooks';
 
 const PAGE_SIZE = 25;
@@ -13,7 +14,9 @@ const linkButton =
 
 export function PatientsPage() {
   const { data: me } = useMe();
-  const [search, setSearch] = useState('');
+  // ?q=… : suite de la recherche rapide de l'en-tête.
+  const [params] = useSearchParams();
+  const [search, setSearch] = useState(params.get('q') ?? '');
   const [status, setStatus] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
   const [page, setPage] = useState(0);
   const q = useDebounced(search.trim(), 300);

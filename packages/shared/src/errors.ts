@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { overrideReasonSchema } from './appointments';
 
 /**
  * Codes d'erreur exposés par l'API. Le client s'appuie sur le code, jamais sur le message,
@@ -34,6 +35,8 @@ export const apiErrorSchema = z.object({
     code: errorCodeSchema,
     message: z.string(),
     requestId: z.string().optional(),
+    /** `AVAILABILITY_CONFIRMATION_REQUIRED` : raisons à afficher avant la confirmation. */
+    reasons: z.array(overrideReasonSchema).optional(),
   }),
 });
 export type ApiError = z.infer<typeof apiErrorSchema>;

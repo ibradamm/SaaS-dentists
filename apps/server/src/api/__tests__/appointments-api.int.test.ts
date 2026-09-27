@@ -130,6 +130,24 @@ describe('API rendez-vous', () => {
     expect(confirmed.statusCode).toBe(201);
   });
 
+  it('dans le passé : 409 avec les raisons structurées, puis 201 une fois confirmé', async () => {
+    const patient = await newPatient();
+    // Lundi 28, 7 h à Paris : avant l'heure de l'horloge (8 h) et hors horaires.
+    const refused = await admin.post('/api/appointments', booking(patient, '2026-09-28T07:00'));
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toMatchObject({
+      error: {
+        code: 'AVAILABILITY_CONFIRMATION_REQUIRED',
+        reasons: ['IN_PAST', 'OUTSIDE_WORKING_HOURS'],
+      },
+    });
+    const confirmed = await admin.post(
+      '/api/appointments',
+      booking(patient, '2026-09-28T07:00', { allowOutsideAvailability: true }),
+    );
+    expect(confirmed.statusCode).toBe(201);
+  });
+
   it('absence : 409 PRACTITIONER_ABSENT ; créneau pris : 409 SLOT_UNAVAILABLE ; conflits listés', async () => {
     const taken = await admin.post(
       '/api/appointments',

@@ -6,7 +6,7 @@ import type {
   Practitioner,
   Role,
 } from '@dental/shared';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { me, mockApi, renderApp, type MockCall } from '../../test/render';
 
@@ -39,9 +39,14 @@ const practitioner = (id: string, displayName: string, userId: string | null): P
   status: 'ACTIVE',
   version: 1,
 });
+// Aucun praticien lié au compte connecté (secrétaire) ; `linked` : le compte est Dr Bravo.
 const practitioners = [
-  practitioner(DR_ALPHA, 'Dr Alpha', ME_ID),
+  practitioner(DR_ALPHA, 'Dr Alpha', null),
   practitioner(DR_BRAVO, 'Dr Bravo', null),
+];
+const linked = [
+  practitioner(DR_ALPHA, 'Dr Alpha', null),
+  practitioner(DR_BRAVO, 'Dr Bravo', ME_ID),
 ];
 
 const types: AppointmentType[] = [
@@ -236,13 +241,15 @@ describe('agenda', () => {
     ).toBeInTheDocument();
   });
 
-  it('vue semaine : un praticien, sept jours, requête filtrée', async () => {
+  it('vue semaine : un praticien, sept jours, requête filtrée ; le sien présélectionné', async () => {
     const calls = setup('DENTIST', {
+      'GET /api/practitioners': () => ({ status: 200, body: { practitioners: linked } }),
       'GET /api/appointments': () => ({
         status: 200,
         body: {
           appointments: [
             appointment({
+              practitionerId: DR_BRAVO,
               startAt: '2026-10-01T07:00:00.000Z',
               endAt: '2026-10-01T07:30:00.000Z',
             }),
@@ -257,11 +264,44 @@ describe('agenda', () => {
         name: 'jeudi 1 octobre, 09:00–09:30 DUPONT Léa, Consultation, Prévu',
       }),
     ).toBeInTheDocument();
-    // Le dentiste voit d'abord son propre agenda.
-    expect(screen.getByLabelText('Agenda de')).toHaveValue(DR_ALPHA);
+    // Le dentiste voit d'abord son propre agenda (Dr Bravo), pas le premier de la liste.
+    expect(screen.getByLabelText('Agenda de')).toHaveValue(DR_BRAVO);
     expect(calls.find((c) => c.url.startsWith('/api/appointments?'))?.url).toBe(
-      `/api/appointments?from=2026-09-28&to=2026-10-04&practitionerId=${DR_ALPHA}`,
+      `/api/appointments?from=2026-09-28&to=2026-10-04&practitionerId=${DR_BRAVO}`,
     );
+  });
+
+  it('compte lié à un praticien : sa semaine par défaut ; « Jour » affiche tout le cabinet', async () => {
+    const calls = setup('DENTIST', {
+      'GET /api/practitioners': () => ({ status: 200, body: { practitioners: linked } }),
+    });
+    renderApp('/agenda');
+    await screen.findByRole('heading', { name: 'Semaine du lundi 28 septembre 2026' });
+    fireEvent.click(screen.getByRole('button', { name: 'Jour' }));
+    await screen.findByRole('heading', { name: 'lundi 28 septembre 2026' });
+    expect(
+      await screen.findByRole('button', { name: /^Dr Alpha, 09:00–09:30 DUPONT Léa/ }),
+    ).toBeInTheDocument();
+    expect(calls.filter((c) => c.url.startsWith('/api/appointments?')).map((c) => c.url)).toEqual([
+      `/api/appointments?from=2026-09-28&to=2026-10-04&practitionerId=${DR_BRAVO}`,
+      '/api/appointments?from=2026-09-28&to=2026-09-28',
+    ]);
+  });
+
+  it('deux changements rapprochés (vue puis date) : aucun n’efface l’autre', async () => {
+    setup('DENTIST', {
+      'GET /api/practitioners': () => ({ status: 200, body: { practitioners: linked } }),
+    });
+    renderApp('/agenda');
+    await screen.findByRole('heading', { name: 'Semaine du lundi 28 septembre 2026' });
+    // Même lot de rendu : le second changement ne doit pas repartir de l'adresse d'avant.
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Jour' }));
+      fireEvent.change(screen.getByLabelText('Aller au'), { target: { value: '2026-09-29' } });
+    });
+    expect(
+      await screen.findByRole('heading', { name: 'mardi 29 septembre 2026' }),
+    ).toBeInTheDocument();
   });
 
   it('hors horaires : aucune confirmation envoyée d’office ; « Confirmer quand même » renvoie la demande', async () => {
@@ -309,6 +349,40 @@ describe('agenda', () => {
       ['2026-09-28T19:30', false],
       ['2026-09-28T19:30', true],
     ]);
+  });
+
+  it('dans le passé : raison affichée clairement, confirmation seulement sur clic', async () => {
+    const calls = setup('SECRETARY', {
+      'POST /api/appointments': (call) =>
+        (call.body as { allowOutsideAvailability: boolean }).allowOutsideAvailability
+          ? { status: 201, body: appointment() }
+          : {
+              status: 409,
+              body: {
+                error: {
+                  code: 'AVAILABILITY_CONFIRMATION_REQUIRED',
+                  message:
+                    "Ce rendez-vous est dans le passé. Confirmez pour l'enregistrer quand même.",
+                  reasons: ['IN_PAST'],
+                },
+              },
+            },
+    });
+    renderApp('/agenda');
+    const form = await openNewForm();
+    // 8 h, alors qu'il est 10 h au cabinet.
+    fireEvent.change(within(form).getByLabelText('Heure'), { target: { value: '08:00' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Enregistrer le rendez-vous' }));
+    const warning = await within(form).findByRole('alert');
+    expect(within(warning).getByRole('listitem')).toHaveTextContent('Rendez-vous dans le passé');
+    expect(posts(calls, '/api/appointments')).toHaveLength(1);
+    fireEvent.click(within(form).getByRole('button', { name: 'Confirmer quand même' }));
+    await screen.findByText('Rendez-vous enregistré.');
+    expect(
+      posts(calls, '/api/appointments').map(
+        (c) => (c.body as { allowOutsideAvailability: boolean }).allowOutsideAvailability,
+      ),
+    ).toEqual([false, true]);
   });
 
   it('absence du praticien : refus sans dérogation possible', async () => {
@@ -428,6 +502,21 @@ describe('agenda', () => {
     expect(within(details).getByRole('button', { name: 'Recharger' })).toBeInTheDocument();
   });
 
+  it('panneau : focus sur son titre, Échap le ferme et rend le focus au rendez-vous', async () => {
+    setup('SECRETARY');
+    renderApp('/agenda');
+    const opener = await screen.findByRole('button', { name: /^Dr Bravo, 14:00/ });
+    opener.focus();
+    fireEvent.click(opener);
+    const details = await panel('Rendez-vous');
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(details).getByRole('heading', { level: 2 })),
+    );
+    fireEvent.keyDown(details, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('complementary')).toBeNull());
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('déplacement : seuls les champs modifiés sont envoyés', async () => {
     const calls = setup('SECRETARY', {
       [`PATCH /api/appointments/${RDV_LATER}`]: () => ({
@@ -468,5 +557,113 @@ describe('agenda', () => {
     expect(screen.queryByRole('button', { name: 'Nouveau rendez-vous' })).toBeNull();
     expect(within(details).queryByRole('button', { name: 'Marquer honoré' })).toBeNull();
     expect(within(details).queryByRole('button', { name: 'Modifier ou déplacer' })).toBeNull();
+  });
+
+  it('appel d’un nouveau patient : fiche créée dans le formulaire, doublon proposé d’abord', async () => {
+    const NEW_ID = '01a0de00-0000-7000-8000-00000000a0ff';
+    let duplicateChecks = 0;
+    const calls = setup('SECRETARY', {
+      'GET /api/patients': () => ({ status: 200, body: { patients: [], total: 0 } }),
+      'GET /api/patients/duplicates': () => {
+        duplicateChecks += 1;
+        // Premier contrôle : un homonyme ; le second (après correction) : aucun.
+        return duplicateChecks === 1
+          ? {
+              status: 200,
+              body: {
+                candidates: [{ ...patientDetail, lastName: 'Lefevre', firstName: 'Jules' }],
+              },
+            }
+          : { status: 200, body: { candidates: [] } };
+      },
+      'POST /api/patients': (call) => ({
+        status: 201,
+        body: {
+          ...patientDetail,
+          id: NEW_ID,
+          lastName: (call.body as { lastName: string }).lastName,
+          firstName: (call.body as { firstName: string }).firstName,
+          primaryPhone: '+33611223344',
+        },
+      }),
+      'POST /api/appointments': () => ({ status: 201, body: appointment() }),
+    });
+    renderApp('/agenda');
+    fireEvent.click(await screen.findByRole('button', { name: 'Nouveau rendez-vous' }));
+    const form = await panel('Nouveau rendez-vous');
+    fireEvent.change(within(form).getByLabelText('Patient'), { target: { value: 'Lefèvre' } });
+    await within(form).findByText('Aucun patient trouvé.');
+    fireEvent.click(within(form).getByRole('button', { name: 'Nouveau patient' }));
+    const newPatient = within(form).getByRole('group', { name: 'Nouveau patient' });
+    expect(within(newPatient).getByLabelText(/^Nom/)).toHaveValue('Lefèvre');
+    fireEvent.change(within(newPatient).getByLabelText(/^Prénom/), { target: { value: 'Jules' } });
+    fireEvent.change(within(newPatient).getByLabelText('Téléphone'), {
+      target: { value: '06 11 22 33 44' },
+    });
+    fireEvent.click(within(newPatient).getByRole('button', { name: 'Créer le patient' }));
+    // Homonyme : proposé avant toute création.
+    expect(
+      await within(newPatient).findByRole('button', { name: /Choisir LEFEVRE Jules/ }),
+    ).toBeInTheDocument();
+    expect(calls.some((c) => c.method === 'POST' && c.url === '/api/patients')).toBe(false);
+    fireEvent.click(within(newPatient).getByRole('button', { name: 'Créer quand même' }));
+    expect(await within(form).findByText(/LEFÈVRE Jules/)).toBeInTheDocument();
+    expect(calls.find((c) => c.method === 'POST' && c.url === '/api/patients')?.body).toEqual({
+      lastName: 'Lefèvre',
+      firstName: 'Jules',
+      birthDate: null,
+      contacts: [{ phone: '06 11 22 33 44' }],
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Enregistrer le rendez-vous' }));
+    await screen.findByText('Rendez-vous enregistré.');
+    expect(posts(calls, '/api/appointments')[0]?.body).toMatchObject({ patientId: NEW_ID });
+  });
+
+  it('sans droit sur les patients : pas de création depuis le formulaire', async () => {
+    const session = me('SECRETARY');
+    session.permissions = session.permissions.filter((p) => p !== 'patient.write');
+    setup('SECRETARY', { 'GET /api/auth/me': () => ({ status: 200, body: session }) });
+    renderApp('/agenda');
+    fireEvent.click(await screen.findByRole('button', { name: 'Nouveau rendez-vous' }));
+    const form = await panel('Nouveau rendez-vous');
+    expect(within(form).queryByRole('button', { name: 'Nouveau patient' })).toBeNull();
+  });
+
+  describe('téléphone', () => {
+    beforeEach(() => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query === '(max-width: 639px)',
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }));
+    });
+
+    it('vue jour : un praticien à la fois, au choix', async () => {
+      setup('SECRETARY');
+      renderApp('/agenda?vue=jour');
+      expect(
+        await screen.findByRole('button', { name: /^Dr Alpha, 09:00–09:30 DUPONT Léa/ }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Dr Bravo, / })).toBeNull();
+      fireEvent.change(screen.getByLabelText('Agenda de'), { target: { value: DR_BRAVO } });
+      expect(await screen.findByRole('button', { name: /^Dr Bravo, 14:00/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Dr Alpha, / })).toBeNull();
+    });
+
+    it('vue semaine : une liste par jour au lieu de la grille', async () => {
+      setup('SECRETARY');
+      renderApp('/agenda?vue=semaine');
+      const monday = await screen.findByRole('region', { name: 'lundi 28 septembre' });
+      expect(
+        within(monday).getByRole('link', {
+          name: 'Ouvrir le rendez-vous : 09:00–09:30 DUPONT Léa',
+        }),
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('region', { name: 'mardi 29 septembre' })).getByText(
+          'Aucun rendez-vous.',
+        ),
+      ).toBeInTheDocument();
+    });
   });
 });

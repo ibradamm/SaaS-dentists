@@ -4,8 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { Alert, Badge, Button, Loading, TextField } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
 import { COLORS, ColorField, ColorSwatch } from './colors';
-
-export const APPOINTMENT_TYPES_KEY = ['appointment-types'] as const;
+import { APPOINTMENT_TYPES_KEY } from '../../lib/queries';
 
 interface FormValues {
   name: string;

@@ -2,6 +2,7 @@ import {
   MAX_APPOINTMENT_MINUTES,
   MIN_APPOINTMENT_MINUTES,
   type Appointment,
+  type OverrideReason,
   type AppointmentType,
   type PatientSummary,
   type Practitioner,
@@ -11,8 +12,11 @@ import { useState, type FormEvent } from 'react';
 import { Alert, Button, SelectField, TextArea, TextField } from '../../components/ui';
 import { ApiError, api, errorMessage } from '../../lib/api';
 import { formatTime, localDateTimeOf } from '../../lib/dates';
-import { formatDate, formatPhone } from '../../lib/format';
+import { formatDate } from '../../lib/format-date';
+import { formatPhone } from '../../lib/format';
 import { useDebounced } from '../../lib/hooks';
+import { OVERRIDE_REASON_LABELS } from './labels';
+import { QuickPatientForm } from './QuickPatientForm';
 
 export interface CreateDefaults {
   practitionerId: string;
@@ -34,6 +38,8 @@ type Props = {
   practitioners: Practitioner[];
   types: AppointmentType[];
   timeZone: string;
+  /** Création d'un patient depuis le formulaire (permission `patient.write`). */
+  canCreatePatient?: boolean;
   onSaved: (appointment: Appointment) => void;
   onCancel: () => void;
 } & ({ mode: 'create'; defaults: CreateDefaults } | { mode: 'edit'; appointment: Appointment });
@@ -81,8 +87,11 @@ export function AppointmentForm(props: Props) {
   const [patient, setPatient] = useState<PatientSummary | null>(
     props.mode === 'create' ? props.defaults.patient : null,
   );
-  // Message du serveur (raisons de la dérogation) en attente d'une confirmation explicite.
-  const [confirmation, setConfirmation] = useState<string | null>(null);
+  // Raisons et message du serveur, en attente d'une confirmation explicite.
+  const [confirmation, setConfirmation] = useState<{
+    message: string;
+    reasons: readonly OverrideReason[];
+  } | null>(null);
 
   const duration = validDuration(values.duration);
   const slots = useQuery({
@@ -131,7 +140,7 @@ export function AppointmentForm(props: Props) {
     onSuccess: props.onSaved,
     onError: (error) => {
       if (error instanceof ApiError && error.code === 'AVAILABILITY_CONFIRMATION_REQUIRED') {
-        setConfirmation(error.message);
+        setConfirmation({ message: error.message, reasons: error.reasons });
       }
     },
   });
@@ -179,6 +188,7 @@ export function AppointmentForm(props: Props) {
     <form onSubmit={submit} noValidate className="flex flex-col gap-3">
       {props.mode === 'create' ? (
         <PatientPicker
+          canCreate={props.canCreatePatient ?? false}
           value={patient}
           onChange={(p) => {
             setPatient(p);
@@ -267,7 +277,15 @@ export function AppointmentForm(props: Props) {
       {confirmation ? (
         <div className="flex flex-col gap-2">
           <Alert tone="warning">
-            <p>{confirmation}</p>
+            <p className="font-semibold">Confirmation nécessaire :</p>
+            {confirmation.reasons.length > 0 && (
+              <ul className="my-1 list-disc pl-5 font-semibold">
+                {confirmation.reasons.map((r) => (
+                  <li key={r}>{OVERRIDE_REASON_LABELS[r]}</li>
+                ))}
+              </ul>
+            )}
+            <p>{confirmation.message}</p>
             <p className="mt-1">
               Confirmez uniquement si ce rendez-vous est voulu : la dérogation est enregistrée dans
               le journal d&apos;audit.
@@ -351,13 +369,16 @@ function SlotSuggestions({
 
 /** Recherche d'un patient actif (nom, téléphone ou date de naissance). */
 function PatientPicker({
+  canCreate,
   value,
   onChange,
 }: {
+  canCreate: boolean;
   value: PatientSummary | null;
   onChange: (patient: PatientSummary | null) => void;
 }) {
   const [search, setSearch] = useState('');
+  const [creating, setCreating] = useState(false);
   const q = useDebounced(search.trim(), 250);
   const results = useQuery({
     queryKey: ['patients', 'picker', q],
@@ -378,6 +399,18 @@ function PatientPicker({
       </div>
     );
   }
+  if (creating) {
+    return (
+      <QuickPatientForm
+        initialName={search.trim()}
+        onCancel={() => setCreating(false)}
+        onCreated={(p) => {
+          setCreating(false);
+          onChange(p);
+        }}
+      />
+    );
+  }
   return (
     <div className="flex flex-col gap-2">
       <TextField
@@ -385,7 +418,7 @@ function PatientPicker({
         type="search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        hint="Nom, téléphone ou date de naissance (JJ/MM/AAAA). Un nouveau patient se crée d'abord dans « Patients »."
+        hint="Nom, téléphone ou date de naissance (JJ/MM/AAAA)."
         autoComplete="off"
       />
       {results.isError && <Alert>{errorMessage(results.error)}</Alert>}
@@ -410,6 +443,13 @@ function PatientPicker({
             </li>
           ))}
         </ul>
+      )}
+      {canCreate && (
+        <div>
+          <Button variant="secondary" onClick={() => setCreating(true)}>
+            Nouveau patient
+          </Button>
+        </div>
       )}
     </div>
   );

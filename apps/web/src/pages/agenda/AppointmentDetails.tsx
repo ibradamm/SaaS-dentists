@@ -5,7 +5,7 @@ import {
   type AppointmentType,
   type Practitioner,
 } from '@dental/shared';
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Alert, Badge, Button, Loading, TextField } from '../../components/ui';
@@ -14,23 +14,8 @@ import { formatDayLabel, formatTime, localDateOf } from '../../lib/dates';
 import { formatPhone } from '../../lib/format';
 import { useNow } from '../../lib/hooks';
 import { AppointmentForm } from './AppointmentForm';
+import { appointmentKey, refreshAgenda } from './refresh';
 import { APPOINTMENT_STATUS_LABELS, STATUS_ACTION_LABELS, STATUS_TONES } from './labels';
-
-export const appointmentKey = (id: string) => ['appointment', id] as const;
-
-/**
- * Après toute écriture : listes et disponibilités rechargées. Les disponibilités sont retirées
- * du cache (jamais d'état périmé affiché, voir BlocksPanel).
- */
-export async function refreshAgenda(queryClient: QueryClient, appointment: Appointment) {
-  queryClient.setQueryData(appointmentKey(appointment.id), appointment);
-  queryClient.removeQueries({ queryKey: ['availability'] });
-  queryClient.removeQueries({ queryKey: ['slots'] });
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: ['appointments'] }),
-    queryClient.invalidateQueries({ queryKey: ['patient-appointments', appointment.patient.id] }),
-  ]);
-}
 
 /** Fiche d'un rendez-vous : détails, changements de statut, modification. */
 export function AppointmentDetails({

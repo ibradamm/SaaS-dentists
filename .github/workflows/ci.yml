@@ -60,6 +60,8 @@ jobs:
         run: pnpm test
       - name: Build
         run: pnpm build
+      - name: Budget du chargement initial de l'interface
+        run: pnpm check:bundle
 
   secrets:
     name: Détection de secrets (gitleaks)

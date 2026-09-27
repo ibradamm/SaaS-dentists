@@ -5,7 +5,7 @@ Projet : plateforme de gestion de cabinet dentaire. Le plan validé est dans `do
 ## Commandes
 
 - Environnement local : `pnpm setup:env` (crée `.env` avec une clé de chiffrement)
-- Vérification complète : `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- Vérification complète : `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check:bundle`
 - PostgreSQL local sans Docker : `pnpm dev:db`, puis `pnpm db:bootstrap && pnpm db:migrate`
 - Nouvelle migration :
   - après une modification de `apps/server/src/db/schema` : `pnpm --filter @dental/server db:generate` ;

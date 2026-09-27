@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Alert, Button, TextArea, TextField } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
-import { formatDate } from '../../lib/format';
+import { formatDate } from '../../lib/format-date';
 
 export function NewPatientPage() {
   const navigate = useNavigate();

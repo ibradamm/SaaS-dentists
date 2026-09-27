@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  ageOn,
   formatDayLabel,
   formatMinutes,
   formatTime,
@@ -56,5 +57,13 @@ describe('dates dans le fuseau du cabinet', () => {
     });
     expect(formatMinutes(570)).toBe('09:30');
     expect(formatMinutes(0)).toBe('00:00');
+  });
+
+  it('âge en années révolues, veille et jour d’anniversaire, 29 février', () => {
+    expect(ageOn('1985-03-12', '2026-03-11')).toBe(40);
+    expect(ageOn('1985-03-12', '2026-03-12')).toBe(41);
+    expect(ageOn('2000-02-29', '2026-02-28')).toBe(25);
+    expect(ageOn('2000-02-29', '2026-03-01')).toBe(26);
+    expect(ageOn('2026-09-27', '2026-09-27')).toBe(0);
   });
 });

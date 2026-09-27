@@ -201,7 +201,7 @@ export function createAppointmentsService(deps: { db: Database; now?: () => Date
       end: b.endAt.getTime(),
       label: b.label,
     }));
-    const evaluation = evaluateSlot({ start, end }, working, blocks);
+    const evaluation = evaluateSlot({ start, end }, working, blocks, now().getTime());
     if (evaluation.absent) {
       throw new AppError(
         'PRACTITIONER_ABSENT',
@@ -216,21 +216,24 @@ export function createAppointmentsService(deps: { db: Database; now?: () => Date
     }
     if (evaluation.reasons.length > 0 && !placement.allowOutsideAvailability) {
       const parts = evaluation.reasons.map((r) =>
-        r === 'OUTSIDE_WORKING_HOURS'
-          ? 'hors des horaires du praticien'
-          : `sur un créneau bloqué${
-              evaluation.blocks.some((b) => b.label)
-                ? ` (${evaluation.blocks
-                    .map((b) => b.label)
-                    .filter(Boolean)
-                    .join(', ')})`
-                : ''
-            }`,
+        r === 'IN_PAST'
+          ? 'dans le passé'
+          : r === 'OUTSIDE_WORKING_HOURS'
+            ? 'hors des horaires du praticien'
+            : `sur un créneau bloqué${
+                evaluation.blocks.some((b) => b.label)
+                  ? ` (${evaluation.blocks
+                      .map((b) => b.label)
+                      .filter(Boolean)
+                      .join(', ')})`
+                  : ''
+              }`,
       );
       throw new AppError(
         'AVAILABILITY_CONFIRMATION_REQUIRED',
         `Ce rendez-vous est ${parts.join(' et ')}. Confirmez pour l'enregistrer quand même.`,
         409,
+        evaluation.reasons,
       );
     }
     // Contrôle préalable pour un message clair ; la contrainte d'exclusion reste la garantie.
