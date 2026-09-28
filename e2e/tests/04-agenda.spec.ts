@@ -153,9 +153,15 @@ test('réponse perdue après enregistrement, puis nouvel essai : enregistré, sa
   });
   await saveButton(panel).click();
   await expect(panel.getByRole('alert')).toContainText('Vérifiez votre connexion et réessayez');
+  const retried = secretary.waitForResponse(
+    (r) => r.request().method() === 'POST' && appointmentsPath(new URL(r.url())),
+  );
   await saveButton(panel).click();
   // Même clé d'idempotence : le serveur renvoie le rendez-vous créé par le premier envoi
   // (corrigé avant la production : auparavant « Le praticien a déjà un rendez-vous… »).
+  // Attendre la réponse : l'alerte du premier envoi reste affichée un instant après le clic,
+  // et `outcome` la prendrait pour l'issue du second.
+  expect((await retried).status()).toBe(200);
   expect(await outcome(secretary, panel)).toBe('enregistré');
   expect(keys).toHaveLength(2);
   expect(keys[1]).toBe(keys[0]);

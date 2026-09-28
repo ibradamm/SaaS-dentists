@@ -115,7 +115,7 @@ export const payments = pgTable(
       columns: [t.clinicId, t.chargeId, t.patientId],
       foreignColumns: [charges.clinicId, charges.id, charges.patientId],
     }),
-    index('payments_charge_idx').on(t.chargeId),
+    index('payments_clinic_charge_idx').on(t.clinicId, t.chargeId),
     index('payments_received_idx').on(t.clinicId, t.receivedAt),
     check('payments_amount_range', amountCheck(t.amountCents)),
     check('payments_currency_format', sql`${t.currency} ~ '^[A-Z]{3}$'`),

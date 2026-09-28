@@ -76,21 +76,23 @@ Statuts possibles :
 | 10 | Contrôle final E2E limité aux données saisies | Prévention | Ajout des secrets (clé, mots de passe des rôles) et des jetons (cookie, en-têtes) | Faille volontaire détectée |
 | 11 | Pas d'outil pour les vérifications sur un hébergement | Prévention | `e2e/support/deployment-checks.ts` et `check:deployment` (9 contrôles), exercés en CI sur la pile locale | `00-stack` ; mutation |
 | 12 | Fichiers `ignore` : certificats, sauvegardes `.backup` / `.bak`, clés SSH, `tmp/` non couverts | Prévention | `.gitignore` complété ; `e2e/artifacts` exclu du lint | `git ls-files -ci` vide |
+| 13 | **Contrôle d'un encaissement quadratique sans statistiques** (trouvé par la CI) : le déclencheur `payments_guard` somme les paiements du montant dû, et sur une table jamais analysée le planificateur passait par l'index (cabinet, date), donc lisait tous les paiements du cabinet à chaque ligne. En CI, 10 000 paiements insérés en une requête ont dépassé le `statement_timeout` de 15 s | Faible en production (un paiement par requête, statistiques tenues par l'autovacuum) ; bloquant pour la CI | Index (cabinet, montant dû) à la place de l'index sur le seul montant dû (migration 0020) : 5,6 s → 0,49 s pour 10 320 paiements en local | `schema-catalog.int.test.ts` (plan générique de la requête du déclencheur) ; mutation sans l'index détectée |
+| 14 | Test de bout en bout « réponse perdue » instable (trouvé par la CI) : après le second clic, l'alerte du premier envoi reste affichée jusqu'au rendu suivant (TanStack Query le diffère par `setTimeout(0)`) ; le test la lisait comme l'issue du second envoi | Test seulement ; aucun défaut de l'application | Le test attend la réponse du second envoi (et vérifie qu'elle est un rejeu, 200) avant de lire l'écran | Échec de la CI reproduit en local en retardant les minuteries de la page : ancienne version en échec (même erreur), nouvelle version verte |
 
 ## 3. Tests exécutés (résultats réels, 2026-09-28)
 
 | Commande | Résultat |
 |---|---|
 | `pnpm format:check && pnpm lint && pnpm typecheck` | Sans erreur |
-| `pnpm test` | shared 80, serveur 409, web 135 : tous verts |
+| `pnpm test` | shared 80, serveur 410, web 135 : tous verts |
 | `pnpm build && pnpm check:bundle` | 146,6 ko compressés (budget 160) ; secrets du build : 34 fichiers, 7 valeurs et 5 motifs cherchés, rien trouvé |
-| `pnpm --filter @dental/server db:generate` | Aucune dérive (migration 0019 incluse) |
-| Parcours de bout en bout (`pnpm e2e`) | **55 sur 55** en 4 min 54 s ; contrôle final : 102 288 lignes (audit, tâches) et journaux sans donnée saisie ni secret |
+| `pnpm --filter @dental/server db:generate` | Aucune dérive (migrations 0019 et 0020 incluses) |
+| Parcours de bout en bout (`pnpm e2e`) | **55 sur 55** en 4 min 48 s (après les corrections 13 et 14) ; contrôle final : 102 262 lignes (audit, tâches) et journaux sans donnée saisie ni secret |
 | `pnpm audit` et `pnpm audit --prod` | Aucune vulnérabilité connue |
 | gitleaks : historique complet, arborescence, bundle, index | Aucun secret versionné (seul le `.env` local, non suivi, apparaît dans l'arborescence) |
 | Failles volontaires | 15 sur 15 au niveau unitaire et intégration (script hors dépôt, validation UUID retirée comprise) ; 3 au niveau bout en bout et outils, toutes détectées : en-têtes de l'interface retirés (parcours et `check:deployment`), secret et cookie injectés dans un journal (contrôle final), secret injecté dans le build (`check-secrets`) |
 | Journal PostgreSQL réel | Violation d'unicité provoquée : `DETAIL` avec la valeur sans le réglage, aucune ligne `DETAIL` avec `terse` |
-| CI GitHub | Voir le résumé de fin de phase (commit de cet audit) |
+| CI GitHub | Premier passage (commit `40875a6`) : **deux échecs**, un par job de tests. Causes établies et corrigées (corrections 13 et 14), chacune reproduite en local avant correction. Passage suivant : voir le résumé de fin de phase |
 
 ## 4. Vérifications staging
 

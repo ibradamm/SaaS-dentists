@@ -141,6 +141,13 @@
       "when": 1790610874917,
       "tag": "0019_appointment_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790614719234,
+      "tag": "0020_payments_clinic_charge_index",
+      "breakpoints": true
     }
   ]
 }

@@ -153,6 +153,18 @@ describe('catalogue du schéma', () => {
     expect(rows.filter((r) => r.granted).map((r) => r.check)).toEqual([]);
   });
 
+  it('le contrôle d’un encaissement (payments_guard) lit l’index (cabinet, montant dû)', async () => {
+    // Requête du déclencheur, en plan générique comme dans PL/pgSQL. Sans cet index, une table
+    // sans statistiques est lue par (cabinet, date) : chaque encaissement parcourt tous ceux
+    // du cabinet, et une insertion en lot devient quadratique.
+    const { rows } = await t.ownerPool.query<{ 'QUERY PLAN': unknown }>(`
+      EXPLAIN (GENERIC_PLAN, FORMAT JSON)
+      SELECT coalesce(sum(p.amount_cents), 0) FROM payments p
+      WHERE p.clinic_id = $1 AND p.charge_id = $2 AND p.status = 'RECORDED'`);
+    const plan = JSON.stringify(rows[0]?.['QUERY PLAN']);
+    expect(plan).toContain('"Index Name":"payments_clinic_charge_idx"');
+  });
+
   it('le rôle applicatif ne peut créer aucun objet dans le schéma public', async () => {
     const { rows } = await t.ownerPool.query<{ can_create: boolean }>(
       `SELECT has_schema_privilege($1, 'public', 'CREATE') AS can_create`,
