@@ -10,6 +10,7 @@ function send(
   code: ErrorCode,
   message: string,
   reasons?: readonly OverrideReason[],
+  clinics?: readonly { id: string; name: string }[],
 ) {
   const body: ApiError = {
     error: {
@@ -17,6 +18,7 @@ function send(
       message,
       requestId: String(reply.request.id),
       ...(reasons ? { reasons: [...reasons] } : {}),
+      ...(clinics ? { clinics: [...clinics] } : {}),
     },
   };
   return reply.status(status).send(body);
@@ -30,7 +32,7 @@ function send(
 export function createErrorHandler(reporter: ErrorReporter) {
   return function errorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
     if (error instanceof AppError) {
-      return send(reply, error.statusCode, error.code, error.message, error.reasons);
+      return send(reply, error.statusCode, error.code, error.message, error.reasons, error.clinics);
     }
     if (error instanceof ZodError || error.validation) {
       return send(reply, 400, 'VALIDATION_FAILED', 'Requête invalide');

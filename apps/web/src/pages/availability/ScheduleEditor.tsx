@@ -183,8 +183,13 @@ export function ScheduleEditor({
                   className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-2"
                 >
                   <legend className="w-24 text-sm font-medium">{label}</legend>
-                  {intervals.map((interval, index) =>
-                    interval.weekday !== weekday ? null : (
+                  {intervals.map((interval, index) => {
+                    if (interval.weekday !== weekday) return null;
+                    // Numéro de la plage dans sa journée (« lundi, plage 2 »), pas dans la semaine.
+                    const position = intervals
+                      .slice(0, index + 1)
+                      .filter((x) => x.weekday === weekday).length;
+                    return (
                       <span
                         key={index}
                         className="flex items-center gap-1 rounded-md bg-slate-50 px-2 py-1"
@@ -192,7 +197,7 @@ export function ScheduleEditor({
                         <input
                           type="time"
                           step={300}
-                          aria-label={`${label}, début de la plage ${index + 1}`}
+                          aria-label={`${label}, début de la plage ${position}`}
                           className="min-h-11 rounded border border-slate-300 px-2"
                           value={interval.start}
                           onChange={(e) => update(index, { start: e.target.value })}
@@ -201,7 +206,7 @@ export function ScheduleEditor({
                         <input
                           type="time"
                           step={300}
-                          aria-label={`${label}, fin de la plage ${index + 1}`}
+                          aria-label={`${label}, fin de la plage ${position}`}
                           className="min-h-11 rounded border border-slate-300 px-2"
                           value={interval.end === '24:00' ? '23:59' : interval.end}
                           onChange={(e) =>
@@ -218,8 +223,8 @@ export function ScheduleEditor({
                           Retirer
                         </Button>
                       </span>
-                    ),
-                  )}
+                    );
+                  })}
                   <Button variant="secondary" onClick={() => addInterval(weekday)}>
                     Ajouter une plage
                   </Button>

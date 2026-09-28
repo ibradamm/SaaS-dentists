@@ -11,6 +11,8 @@ export class AppError extends Error {
     readonly statusCode: number,
     /** Raisons d'une confirmation exigée, transmises telles quelles au client. */
     readonly reasons?: readonly OverrideReason[],
+    /** Cabinets proposés au choix (CLINIC_SELECTION_REQUIRED). */
+    readonly clinics?: readonly { id: string; name: string }[],
   ) {
     super(message);
     this.name = 'AppError';

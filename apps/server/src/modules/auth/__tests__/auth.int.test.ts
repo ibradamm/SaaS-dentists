@@ -112,6 +112,38 @@ describe('authentification (services, base réelle, rôle applicatif)', () => {
         code: 'INVALID_CREDENTIALS',
       });
     });
+
+    it('compte de plusieurs cabinets : choix proposé après le mot de passe, session dans le cabinet choisi', async () => {
+      const { auth } = createTestAuth(t.appDb);
+      const first = await createTestClinic(t.ownerDb, { name: 'Cabinet des Tilleuls' });
+      const second = await createTestClinic(t.ownerDb, { name: 'Cabinet Albert' });
+      const outsider = await createTestClinic(t.ownerDb, { name: 'Cabinet étranger' });
+      const user = await createUser(t.ownerDb, first.id, 'SECRETARY');
+      await withTenant(t.ownerDb, second.id, (tx) =>
+        tx.insert(clinicMemberships).values({ userId: user.id, role: 'SECRETARY' }),
+      );
+      const credentials = { email: user.email, password: user.password };
+      await expect(auth.login(credentials, META)).rejects.toMatchObject({
+        code: 'CLINIC_SELECTION_REQUIRED',
+        statusCode: 409,
+        clinics: [
+          { id: second.id, name: 'Cabinet Albert' },
+          { id: first.id, name: 'Cabinet des Tilleuls' },
+        ],
+      });
+      // Mauvais mot de passe : aucun cabinet révélé.
+      const wrong = await auth
+        .login({ ...credentials, password: 'mauvais-mot-de-passe' }, META)
+        .catch((e: { code: string; clinics?: unknown }) => e);
+      expect(wrong).toMatchObject({ code: 'INVALID_CREDENTIALS' });
+      expect((wrong as { clinics?: unknown }).clinics).toBeUndefined();
+      // Cabinet choisi : la session y est ouverte ; un cabinet dont il n'est pas membre : refus.
+      const issued = await auth.login({ ...credentials, clinicId: second.id }, META);
+      expect((await auth.resolveSession(issued.token))?.actor.clinicId).toBe(second.id);
+      await expect(
+        auth.login({ ...credentials, clinicId: outsider.id }, META),
+      ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    });
   });
 
   describe('sessions', () => {

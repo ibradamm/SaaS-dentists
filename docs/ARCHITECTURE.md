@@ -243,7 +243,7 @@ Double authentification obligatoire pour ADMIN et DENTIST.
 | Donnée | Proposition |
 |---|---|
 | Lignes d'import (données personnelles) | Effacées à la validation ou à l'abandon du lot ; brouillons abandonnés effacés après 24 h (tâche nocturne, ADR 0011) |
-| Sessions terminées | Supprimées 30 jours après leur fin (tâche nocturne ; règle inscrite dans la politique RLS, ADR 0011) |
+| Sessions terminées | 30 jours après leur fin (validé pour le MVP), puis supprimées par la tâche nocturne. Politique configurable (`SESSION_RETENTION_DAYS`, 30 à 3 650 jours) à revoir après avis juridique ; plancher de 30 jours dans la politique RLS (ADR 0011) |
 | Journaux applicatifs | 30 jours |
 | `audit_logs` | À fixer avec un juriste (souvent plusieurs années) |
 | Paiements | Durée légale comptable du pays |

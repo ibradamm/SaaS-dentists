@@ -107,4 +107,28 @@ describe('configuration', () => {
       loadWorkerConfig({ ...validApiEnv, SENTRY_DSN: 'http://cle@127.0.0.1:9000/42' }).SENTRY_DSN,
     ).toBe('http://cle@127.0.0.1:9000/42');
   });
+
+  it('conservation des sessions : 30 jours par défaut, configurable, jamais sous le plancher RLS', () => {
+    expect(loadWorkerConfig(validApiEnv).SESSION_RETENTION_DAYS).toBe(30);
+    expect(
+      loadWorkerConfig({ ...validApiEnv, SESSION_RETENTION_DAYS: '180' }).SESSION_RETENTION_DAYS,
+    ).toBe(180);
+    expect(() => loadWorkerConfig({ ...validApiEnv, SESSION_RETENTION_DAYS: '7' })).toThrow(
+      /SESSION_RETENTION_DAYS : au moins 30 jours/,
+    );
+  });
+
+  it('limitation de débit : 300 et 10 par minute par défaut, configurables', () => {
+    expect(loadApiConfig(validApiEnv)).toMatchObject({
+      API_RATE_LIMIT_PER_MINUTE: 300,
+      API_RATE_LIMIT_SENSITIVE_PER_MINUTE: 10,
+    });
+    expect(
+      loadApiConfig({ ...validApiEnv, API_RATE_LIMIT_SENSITIVE_PER_MINUTE: '1000' })
+        .API_RATE_LIMIT_SENSITIVE_PER_MINUTE,
+    ).toBe(1000);
+    expect(() => loadApiConfig({ ...validApiEnv, API_RATE_LIMIT_PER_MINUTE: '0' })).toThrow(
+      /API_RATE_LIMIT_PER_MINUTE/,
+    );
+  });
 });

@@ -14,8 +14,10 @@ export const SECURITY_POLICY = {
   mfaMaxAttempts: 5,
   // Tolérance de décalage d'horloge pour le code TOTP (±1 pas de 30 s).
   totpToleranceSeconds: 30,
-  // Sessions terminées conservées 30 jours (enquête de sécurité), puis supprimées par la tâche
-  // de conservation ; la même durée est inscrite dans la politique RLS (migration 0018).
+  // Sessions terminées conservées 30 jours par défaut (enquête de sécurité), puis supprimées
+  // par la tâche de conservation. Durée configurable (SESSION_RETENTION_DAYS) mais jamais en
+  // dessous de ce plancher, inscrit dans la politique RLS (migration 0018) : le raccourcir
+  // demande une nouvelle migration (docs/adr/0011, section 6).
   sessionRetentionDays: 30,
   // Mise à jour de last_seen_at au plus une fois par minute (évite une écriture par requête).
   sessionTouchSeconds: 60,

@@ -20,7 +20,8 @@ export interface ErrorContext {
 }
 
 export interface ErrorReporter {
-  report(error: unknown, context?: ErrorContext): void;
+  /** Identifiant de l'événement envoyé (32 caractères hexadécimaux), ou undefined. */
+  report(error: unknown, context?: ErrorContext): string | undefined;
   /** Attend l'envoi des événements en cours (arrêt du processus), au plus `timeoutMs`. */
   flush(timeoutMs?: number): Promise<void>;
 }
@@ -139,8 +140,8 @@ export function createSentryReporter(options: {
   const pending = new Set<Promise<void>>();
   let pausedUntil = 0;
 
-  function report(error: unknown, context: ErrorContext = {}) {
-    if (Date.now() < pausedUntil) return;
+  function report(error: unknown, context: ErrorContext = {}): string | undefined {
+    if (Date.now() < pausedUntil) return undefined;
     const event = buildEvent(
       error,
       {
@@ -178,6 +179,7 @@ export function createSentryReporter(options: {
       .catch(() => options.logger.warn('remontée d’erreur impossible'))
       .finally(() => pending.delete(request));
     pending.add(request);
+    return event.event_id;
   }
 
   async function flush(timeoutMs = 2_000) {

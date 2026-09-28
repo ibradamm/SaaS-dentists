@@ -10,9 +10,15 @@ export function formatDate(iso: string | null | undefined): string {
   return y && m && d ? `${d}/${m}/${y}` : iso;
 }
 
-export function formatDateTime(iso: string | null | undefined): string {
+/**
+ * Date et heure d'un instant dans le fuseau du cabinet (ADR 0006) : jamais celui du poste,
+ * qui peut être ailleurs (déplacement, poste mal réglé).
+ */
+export function formatDateTime(iso: string | null | undefined, timeZone: string): string {
   if (!iso) return '';
-  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(iso),
-  );
+  return new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone,
+  }).format(new Date(iso));
 }

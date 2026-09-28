@@ -104,8 +104,10 @@ export default tseslint.config(
     // Les CLI d'exploitation écrivent sur la sortie standard.
     files: [
       'apps/server/src/db/cli/**',
+      'apps/server/src/cli/**',
       'apps/server/scripts/**',
       'apps/web/scripts/**',
+      'e2e/scripts/**',
       'scripts/**',
     ],
     rules: { 'no-console': 'off' },

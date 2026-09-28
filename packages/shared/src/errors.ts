@@ -41,6 +41,11 @@ export const apiErrorSchema = z.object({
     requestId: z.string().optional(),
     /** `AVAILABILITY_CONFIRMATION_REQUIRED` : raisons à afficher avant la confirmation. */
     reasons: z.array(overrideReasonSchema).optional(),
+    /**
+     * `CLINIC_SELECTION_REQUIRED` : cabinets actifs du compte, donnés seulement après un mot
+     * de passe correct, pour choisir celui où ouvrir la session.
+     */
+    clinics: z.array(z.object({ id: z.uuid(), name: z.string() })).optional(),
   }),
 });
 export type ApiError = z.infer<typeof apiErrorSchema>;

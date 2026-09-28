@@ -10,6 +10,7 @@ import { createDb } from '../../db/client';
 import { registerJobHandlers } from '../../jobs/handlers';
 import { RETENTION_QUEUE } from '../../jobs/retention';
 import { createSentryReporter, type ErrorReporter } from '../../lib/error-reporter';
+import { SENTINEL, runSentryCheck } from '../../lib/sentry-check';
 import { createErrorHandler } from '../error-handler';
 
 interface Received {
@@ -174,5 +175,28 @@ describe('remontée des erreurs : ce qui part vers Sentry', () => {
     await app.close();
     await unreachable.flush();
     expect(res.statusCode).toBe(500);
+  });
+
+  it('commande de contrôle (Phase 11) : erreur contrôlée reçue, sentinelles absentes', async () => {
+    received.length = 0;
+    const { port } = server.address() as AddressInfo;
+    const result = await runSentryCheck({
+      dsn: `http://clepublique@127.0.0.1:${port}/42`,
+      environment: 'staging',
+      release: 'controle-1',
+      logger: silent,
+    });
+    expect(result.status).toBe(200);
+    const [sent] = envelopes();
+    expect(sent!.event.event_id).toBe(result.eventId);
+    expect(sent!.body).toBe(result.sent);
+    expect(sent!.body).not.toContain(SENTINEL);
+    expect(sent!.body.toLowerCase()).not.toContain(SENTINEL.toLowerCase());
+    expect(sent!.body).toContain('Failed query: select $1::int as controle');
+    expect(sent!.event).toMatchObject({
+      environment: 'staging',
+      release: 'controle-1',
+      tags: { service: 'sentry-check', error_code: '22P02', request_id: 'controle-sentry' },
+    });
   });
 });

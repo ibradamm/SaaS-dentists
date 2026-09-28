@@ -63,6 +63,50 @@ jobs:
       - name: Budget du chargement initial de l'interface
         run: pnpm check:bundle
 
+  e2e:
+    name: Parcours de bout en bout (Chromium, pile de production)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Base PostgreSQL éphémère du job : ces mots de passe ne protègent rien de réel.
+      TEST_DATABASE_ADMIN_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      DATABASE_OWNER_PASSWORD: ci-owner-password-not-a-secret
+      DATABASE_APP_PASSWORD: ci-app-password-not-a-secret
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build de production (API, worker, commandes, interface)
+        run: pnpm build
+      - name: Chromium de la version de Playwright figée
+        run: pnpm --filter @dental/e2e exec playwright install --with-deps chromium
+      - name: Parcours de bout en bout
+        run: pnpm --filter @dental/e2e e2e
+      - name: Rapport, traces et journaux (données fictives uniquement)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: e2e/artifacts
+          retention-days: 7
+          if-no-files-found: ignore
+
   secrets:
     name: Détection de secrets (gitleaks)
     runs-on: ubuntu-24.04

@@ -11,6 +11,7 @@ import { Link } from 'react-router';
 import { Alert, Button, Loading, SelectField } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
 import { formatDateTime } from '../../lib/format-date';
+import { useClinic } from '../../lib/queries';
 import {
   FIELD_LABELS,
   mapRows,
@@ -289,6 +290,8 @@ function ReportStep({
 }
 
 function History() {
+  // Fuseau du cabinet ; rien n'est affiché tant qu'il n'est pas connu.
+  const timeZone = useClinic().data?.timezone;
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ['imports'], queryFn: api.listImports });
   const revert = useMutation({
@@ -316,7 +319,8 @@ function History() {
             className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
           >
             <span>
-              <strong>{b.fileName}</strong> · {formatDateTime(b.createdAt)} ·{' '}
+              <strong>{b.fileName}</strong> ·{' '}
+              {timeZone ? formatDateTime(b.createdAt, timeZone) : ''} ·{' '}
               {BATCH_STATUS_LABELS[b.status]}
               {b.status === 'COMMITTED' && ` · ${b.counts.created} patient(s) créé(s)`}
               {b.status === 'REVERTED' && ` · ${b.counts.reverted} supprimé(s)`}

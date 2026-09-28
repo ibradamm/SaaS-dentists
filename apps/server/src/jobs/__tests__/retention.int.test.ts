@@ -125,6 +125,16 @@ describe('conservation des données : tâche quotidienne', () => {
     }
   });
 
+  it('durée configurable : à 45 jours, une session terminée depuis 40 jours est conservée', async () => {
+    const logger = createLogger({ service: 'worker', env: 'test', level: 'silent' });
+    const report = await runRetention({ db: t.appDb, logger, sessionRetentionDays: 45 });
+    // Les brouillons de plus de 24 h sont purgés quelle que soit la durée des sessions.
+    expect(report.importDrafts).toBeGreaterThanOrEqual(2);
+    for (const clinic of clinics) {
+      expect(await exists(clinic.id, 'sessions', sessionsOf.get(clinic.id)!.old)).toBe(true);
+    }
+  });
+
   it('chaque cabinet : sessions terminées et brouillons abandonnés supprimés, le reste intact', async () => {
     const lines: string[] = [];
     const logger = createLogger({
@@ -136,7 +146,6 @@ describe('conservation des données : tâche quotidienne', () => {
     const report = await runRetention({ db: t.appDb, logger });
     expect(report.clinics).toBeGreaterThanOrEqual(2);
     expect(report.sessions).toBeGreaterThanOrEqual(2);
-    expect(report.importDrafts).toBeGreaterThanOrEqual(2);
     for (const clinic of clinics) {
       const s = sessionsOf.get(clinic.id)!;
       expect(await exists(clinic.id, 'sessions', s.old)).toBe(false);

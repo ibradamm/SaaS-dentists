@@ -39,6 +39,7 @@ try {
     pool,
     db: createDb(pool),
     errorReporter,
+    sessionRetentionDays: config.SESSION_RETENTION_DAYS,
   });
   logger.info({ queues: registered }, 'worker démarré');
 

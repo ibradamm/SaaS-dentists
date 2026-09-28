@@ -125,8 +125,13 @@ Observation sans faille : sans le contrôle de permission de la route, 16 routes
   - Un émetteur minimal n'envoie par construction que ce qu'il construit. Il ne dépend pas d'un nettoyage a posteriori.
 - **Limite de la vérification.**
   - Le format et le contenu sont vérifiés contre un serveur d'ingestion local.
-  - L'environnement de développement refuse l'accès réseau à `*.sentry.io`. L'acceptation par le vrai Sentry reste à vérifier en recette, avec un DSN de staging.
+  - L'environnement de développement refuse l'accès réseau à `*.sentry.io` (refus du proxy, vérifié en Phase 9 puis de nouveau en Phase 10). L'acceptation par le vrai Sentry **reste à vérifier en Phase 11**, avec un projet de staging. Le proxy n'a pas été contourné.
   - L'organisation Sentry du porteur du projet n'a aucun projet. Aucun n'a été créé, faute de pouvoir l'utiliser depuis cet environnement.
+  - Commande prête : `APP_ENV=staging SENTRY_DSN=… pnpm --filter @dental/server sentry:check`.
+    - Elle refuse tout autre environnement que staging et exige un DSN en HTTPS, lu dans l'environnement.
+    - Elle envoie une erreur contrôlée dont les champs écartés (paramètres SQL, `detail`, cookie, en-tête d'autorisation, corps) portent une sentinelle fictive.
+    - Elle affiche la réponse de Sentry, l'identifiant de l'événement et le corps exact envoyé.
+    - La procédure de vérification est dans le rapport de la Phase 10.
 
 ## 6. Conservation des données
 
@@ -139,6 +144,10 @@ Observation sans faille : sans le contrôle de permission de la route, 16 routes
   - Le rôle applicatif ne peut supprimer que des sessions de son cabinet terminées depuis plus de 30 jours. La règle est dans la politique RLS (horloge de la base) : même un `DELETE` sans condition ne supprime pas une session récente.
   - Les durées de la politique et de `SECURITY_POLICY` sont comparées par un test.
 - **Le journal n'enregistre que des compteurs.**
+- **Durée des sessions terminées : politique configurable** (validée le 2026-09-27 pour le MVP : 30 jours).
+  - `SESSION_RETENTION_DAYS` (worker), 30 par défaut, de 30 à 3 650 jours. Une valeur hors de ces bornes empêche le démarrage.
+  - 30 jours est aussi le plancher inscrit dans la politique RLS : allonger la durée ne demande qu'un changement de configuration ; la raccourcir demande une nouvelle migration (et le test qui compare la politique à `SECURITY_POLICY`).
+  - La valeur définitive dépend de l'avis juridique (journaux de connexion : durée souvent recommandée entre 6 mois et 1 an). Elle pourra évoluer sans changer le code.
 
 ## 7. Préparation du déploiement (sans déploiement)
 

@@ -10,6 +10,8 @@ export interface JobContext {
   pool: pg.Pool;
   db: Database;
   errorReporter?: ErrorReporter;
+  /** Durée de conservation des sessions terminées (SESSION_RETENTION_DAYS). */
+  sessionRetentionDays?: number;
 }
 
 /**
@@ -21,7 +23,13 @@ export async function registerJobHandlers(boss: PgBoss, context: JobContext): Pr
   const reporter = context.errorReporter ?? noopReporter;
   await boss.work(RETENTION_QUEUE, async () => {
     try {
-      await runRetention({ db: context.db, logger: context.logger });
+      await runRetention({
+        db: context.db,
+        logger: context.logger,
+        ...(context.sessionRetentionDays
+          ? { sessionRetentionDays: context.sessionRetentionDays }
+          : {}),
+      });
     } catch (error) {
       context.logger.error({ err: error }, 'échec de la conservation des données');
       reporter.report(error, { job: RETENTION_QUEUE });

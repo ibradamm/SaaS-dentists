@@ -203,7 +203,26 @@ export function createAuthService(deps: AuthServiceDeps) {
         : undefined;
     if (!membership) {
       if (!input.clinicId && memberships.length > 1) {
-        throw new AppError('CLINIC_SELECTION_REQUIRED', 'Choisissez le cabinet', 409);
+        // Mot de passe vérifié : le compte peut connaître ses cabinets (actifs), chacun lu
+        // dans son propre contexte.
+        const choices: { id: string; name: string }[] = [];
+        for (const m of memberships) {
+          const [clinic] = await withTenant(db, m.clinicId, (tx) =>
+            tx
+              .select({ id: clinics.id, name: clinics.name, status: clinics.status })
+              .from(clinics)
+              .where(eq(clinics.id, m.clinicId)),
+          );
+          if (clinic?.status === 'ACTIVE') choices.push({ id: clinic.id, name: clinic.name });
+        }
+        choices.sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+        throw new AppError(
+          'CLINIC_SELECTION_REQUIRED',
+          'Choisissez le cabinet',
+          409,
+          undefined,
+          choices,
+        );
       }
       throw invalidCredentials();
     }

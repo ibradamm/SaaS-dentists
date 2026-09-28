@@ -15,6 +15,7 @@ import { ApiError, api, errorMessage } from '../../lib/api';
 import { can, useMe } from '../../lib/auth';
 import { formatDate, formatDateTime } from '../../lib/format-date';
 import { formatPhone } from '../../lib/format';
+import { useClinic } from '../../lib/queries';
 import { PatientAccount } from '../finance/PatientAccount';
 import { RELATIONSHIP_LABELS } from './labels';
 import { PatientAppointments } from './PatientAppointments';
@@ -236,6 +237,8 @@ function ContactsSection({ patient, editable }: { patient: PatientDetail; editab
 }
 
 function MedicalNotesSection({ patientId, canWrite }: { patientId: string; canWrite: boolean }) {
+  // Fuseau du cabinet ; rien n'est affiché tant qu'il n'est pas connu.
+  const timeZone = useClinic().data?.timezone;
   // Les notes ne sont chargées qu'à la demande : chaque lecture est tracée dans le journal d'audit.
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState('');
@@ -275,7 +278,7 @@ function MedicalNotesSection({ patientId, canWrite }: { patientId: string; canWr
               <li key={n.id} className="rounded-md bg-amber-50 px-3 py-2">
                 <p className="whitespace-pre-wrap">{n.content}</p>
                 <p className="mt-1 text-xs text-slate-600">
-                  {n.authorName} · {formatDateTime(n.createdAt)}
+                  {n.authorName} · {timeZone ? formatDateTime(n.createdAt, timeZone) : ''}
                 </p>
               </li>
             ))}

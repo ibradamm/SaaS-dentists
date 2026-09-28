@@ -38,6 +38,52 @@ describe('parcours de connexion', () => {
     );
   });
 
+  it('compte de plusieurs cabinets : choix du cabinet, puis connexion dans celui-ci', async () => {
+    const A = '01a0de00-0000-7000-8000-0000000000a1';
+    const B = '01a0de00-0000-7000-8000-0000000000b2';
+    let session: MeResponse | null = null;
+    const calls = mockApi({
+      'GET /api/auth/me': () => (session ? { status: 200, body: session } : unauthenticated),
+      'POST /api/auth/login': (call) => {
+        const body = call.body as { clinicId?: string };
+        if (!body.clinicId) {
+          return {
+            status: 409,
+            body: {
+              error: {
+                code: 'CLINIC_SELECTION_REQUIRED',
+                message: 'Choisissez le cabinet',
+                clinics: [
+                  { id: A, name: 'Cabinet Albert' },
+                  { id: B, name: 'Cabinet des Tilleuls' },
+                ],
+              },
+            },
+          };
+        }
+        session = me('SECRETARY');
+        return { status: 200, body: { restriction: null, csrfToken: 'csrf' } };
+      },
+    });
+    renderApp('/connexion');
+    await screen.findByRole('heading', { name: 'Connexion' });
+    fill('Adresse e-mail', 'moi@cabinet.test');
+    fill('Mot de passe', 'secret');
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }));
+    const group = await screen.findByRole('group', { name: 'Cabinet' });
+    // Pas d'erreur affichée : c'est une étape, pas un échec.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(within(group).getByRole('radio', { name: 'Cabinet Albert' })).toBeChecked();
+    fireEvent.click(within(group).getByRole('radio', { name: 'Cabinet des Tilleuls' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }));
+    await screen.findByRole('heading', { name: /Bonjour/ });
+    const logins = calls.filter((c) => c.url === '/api/auth/login').map((c) => c.body);
+    expect(logins).toEqual([
+      { email: 'moi@cabinet.test', password: 'secret' },
+      { email: 'moi@cabinet.test', password: 'secret', clinicId: B },
+    ]);
+  });
+
   it('connexion secrétaire : accueil, sans accès à la gestion des utilisateurs, jeton CSRF envoyé', async () => {
     let session: MeResponse | null = null;
     const calls = mockApi({

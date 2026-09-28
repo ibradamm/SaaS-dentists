@@ -210,6 +210,11 @@ describe('disponibilités', () => {
     renderApp('/disponibilites');
     fireEvent.click(await screen.findByRole('tab', { name: 'Horaires' }));
     await screen.findByText('Depuis le 01/09/2026');
+    // Plages numérotées dans leur journée (« mardi, plage 1 »), pas sur toute la semaine.
+    const tuesday = screen.getByRole('group', { name: 'Mardi' });
+    fireEvent.click(within(tuesday).getByRole('button', { name: 'Ajouter une plage' }));
+    expect(screen.getByLabelText('Mardi, début de la plage 1')).toBeInTheDocument();
+    fireEvent.click(within(tuesday).getByRole('button', { name: /^Retirer la plage/ }));
     fireEvent.change(screen.getByLabelText('Applicables à partir du'), {
       target: { value: '2026-10-05' },
     });

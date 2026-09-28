@@ -24,7 +24,8 @@
     "setup:env": "node scripts/init-env.mjs",
     "admin:create-clinic": "pnpm --filter @dental/server admin:create-clinic",
     "admin:create-admin": "pnpm --filter @dental/server admin:create-admin",
-    "admin:reset-mfa": "pnpm --filter @dental/server admin:reset-mfa"
+    "admin:reset-mfa": "pnpm --filter @dental/server admin:reset-mfa",
+    "e2e": "pnpm build && pnpm --filter @dental/e2e e2e"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

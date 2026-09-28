@@ -62,6 +62,10 @@ try {
     webOrigin: config.WEB_ORIGIN,
     secureCookies: config.SECURE_COOKIES,
     errorReporter,
+    rateLimits: {
+      global: { max: config.API_RATE_LIMIT_PER_MINUTE, timeWindow: '1 minute' },
+      sensitive: { max: config.API_RATE_LIMIT_SENSITIVE_PER_MINUTE, timeWindow: '1 minute' },
+    },
   });
   await app.listen({ host: config.API_HOST, port: config.API_PORT });
 

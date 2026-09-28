@@ -77,6 +77,8 @@ export class ApiError extends Error {
     message: string,
     /** Raisons d'une confirmation exigée (`AVAILABILITY_CONFIRMATION_REQUIRED`). */
     readonly reasons: readonly OverrideReason[] = [],
+    /** Cabinets proposés (`CLINIC_SELECTION_REQUIRED`). */
+    readonly clinics: readonly { id: string; name: string }[] = [],
   ) {
     super(message);
     this.name = 'ApiError';
@@ -117,6 +119,7 @@ async function request<T>(
           parsed.data.error.code,
           parsed.data.error.message,
           parsed.data.error.reasons,
+          parsed.data.error.clinics,
         )
       : new ApiError(response.status, 'INTERNAL_ERROR', 'Erreur inattendue, réessayez.');
   }

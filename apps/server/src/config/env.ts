@@ -63,6 +63,12 @@ const apiSchema = z
     API_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
     // Origine de l'interface web : seule origine acceptée pour les requêtes modifiantes.
     WEB_ORIGIN: z.url().optional(),
+    // Limitation du nombre de requêtes par adresse IP et par minute (docs/adr/0003) : toutes
+    // les routes, et connexion / code / mot de passe. Un cabinet dont les postes partagent une
+    // même adresse publique peut demander plus que 300 ; la valeur des routes sensibles ne
+    // devrait pas être relevée hors des tests de bout en bout.
+    API_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(10).max(100_000).default(300),
+    API_RATE_LIMIT_SENSITIVE_PER_MINUTE: z.coerce.number().int().min(1).max(100_000).default(10),
     // Clé de chiffrement des champs sensibles (secrets TOTP). Générer :
     // node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
     DATA_ENCRYPTION_KEY: encryptionKey,
@@ -93,7 +99,20 @@ const apiSchema = z
   }));
 
 const workerSchema = z
-  .object({ ...baseShape, ...databaseShape, ...errorReportingShape })
+  .object({
+    ...baseShape,
+    ...databaseShape,
+    ...errorReportingShape,
+    // Conservation des sessions terminées (docs/adr/0011, section 6) : 30 jours validés pour
+    // le MVP, à revoir après avis juridique. Plancher de 30 jours imposé par la politique RLS
+    // (migration 0018) : une durée plus courte demande une nouvelle migration.
+    SESSION_RETENTION_DAYS: z.coerce
+      .number()
+      .int()
+      .min(30, 'au moins 30 jours (plancher de la politique RLS)')
+      .max(3650)
+      .default(30),
+  })
   .superRefine(requireHttpsDsn);
 
 const migrateSchema = z.object({
