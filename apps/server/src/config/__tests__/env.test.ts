@@ -41,8 +41,22 @@ describe('configuration', () => {
       ...validApiEnv,
       APP_ENV: 'production',
       WEB_ORIGIN: 'https://app.cabinet.fr/',
+      API_TRUST_PROXY_HOPS: '1',
     });
-    expect(prod).toMatchObject({ WEB_ORIGIN: 'https://app.cabinet.fr', SECURE_COOKIES: true });
+    expect(prod).toMatchObject({
+      WEB_ORIGIN: 'https://app.cabinet.fr',
+      SECURE_COOKIES: true,
+      API_TRUST_PROXY_HOPS: 1,
+    });
+    expect(loadApiConfig(validApiEnv).API_TRUST_PROXY_HOPS).toBe(0);
+  });
+
+  it('exige le nombre de proxys de confiance en staging et production', () => {
+    for (const APP_ENV of ['staging', 'production']) {
+      expect(() =>
+        loadApiConfig({ ...validApiEnv, APP_ENV, WEB_ORIGIN: 'https://app.cabinet.fr' }),
+      ).toThrow(/API_TRUST_PROXY_HOPS/);
+    }
   });
 
   it('exige une origine web HTTPS en production', () => {
@@ -89,6 +103,7 @@ describe('configuration', () => {
       ...validApiEnv,
       APP_ENV: 'production',
       WEB_ORIGIN: 'https://cabinet.example.org',
+      API_TRUST_PROXY_HOPS: '1',
       SENTRY_DSN: dsn,
       SENTRY_RELEASE: 'v1.2.3+abc',
     };

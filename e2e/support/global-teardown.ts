@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { sql } from './db';
-import { API_LOG, WORKER_LOG } from './env';
+import { API_LOG, WORKER_LOG, databaseUrls } from './env';
 import { FORBIDDEN_IN_LOGS, TYPED_REASONS } from './sentinels';
 
 /**
@@ -13,11 +13,31 @@ import { FORBIDDEN_IN_LOGS, TYPED_REASONS } from './sentinels';
  */
 export default async function globalTeardown() {
   const found: string[] = [];
+  // Secrets de l'exécution : clé de chiffrement, mots de passe des rôles PostgreSQL. Jetons de
+  // session : le nom du cookie ou un en-tête d'authentification ne doit jamais être journalisé.
+  const urls = databaseUrls();
+  const secrets: [string, string][] = [
+    ['DATA_ENCRYPTION_KEY', process.env.E2E_DATA_ENCRYPTION_KEY ?? ''],
+    ['mot de passe dental_owner', urls.ownerPassword],
+    ['mot de passe dental_app', urls.appPassword],
+    ['mot de passe administrateur PostgreSQL', decodeURIComponent(new URL(urls.adminUrl).password)],
+  ];
   for (const file of [API_LOG, WORKER_LOG]) {
     if (!existsSync(file)) continue;
     const text = readFileSync(file, 'utf8');
     for (const value of FORBIDDEN_IN_LOGS) {
       if (text.includes(value)) found.push(`${file} : « ${value} »`);
+    }
+    for (const [name, value] of secrets) {
+      if (value.length >= 8 && text.includes(value)) found.push(`${file} : secret (${name})`);
+    }
+    for (const pattern of [
+      /dental_session=/i,
+      /"cookie"\s*:/i,
+      /"authorization"\s*:/i,
+      /x-csrf-token"\s*:\s*"/i,
+    ]) {
+      if (pattern.test(text)) found.push(`${file} : ${pattern.source}`);
     }
   }
   const values = [...FORBIDDEN_IN_LOGS, ...TYPED_REASONS];

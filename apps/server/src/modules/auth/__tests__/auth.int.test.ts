@@ -27,6 +27,45 @@ describe('authentification (services, base réelle, rôle applicatif)', () => {
     ).then((rows) => rows.map((r) => r.action));
 
   describe('connexion par mot de passe', () => {
+    it('mot de passe temporaire : valable 72 heures, puis refusé explicitement (mauvais mot de passe : refus neutre)', async () => {
+      const user = await createUser(t.ownerDb, clinic.id, 'SECRETARY', {
+        mustChangePassword: true,
+      });
+      const hours = (n: number) => testClock(new Date(Date.now() + n * 3_600_000));
+      const credentials = { email: user.email, password: user.password };
+      const before = await createTestAuth(t.appDb, hours(71)).auth.login(credentials, META);
+      expect(before.restriction).toBe('PASSWORD_CHANGE_REQUIRED');
+      const { auth: later } = createTestAuth(t.appDb, hours(73));
+      await expect(later.login(credentials, META)).rejects.toMatchObject({
+        code: 'TEMPORARY_PASSWORD_EXPIRED',
+        statusCode: 401,
+      });
+      // Mauvais mot de passe : même refus qu'avant, rien sur l'expiration.
+      await expect(
+        later.login({ ...credentials, password: 'mauvais-mot-de-passe' }, META),
+      ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+      // Le refus pour expiration ne compte pas comme un essai : un seul échec enregistré.
+      const [row] = await withTenant(t.ownerDb, clinic.id, (tx) =>
+        tx
+          .select({ failures: users.failedLoginCount, must: users.mustChangePassword })
+          .from(users)
+          .where(eq(users.id, user.id)),
+      );
+      expect(row).toEqual({ failures: 1, must: true });
+      // Mot de passe choisi avant l'expiration : plus aucune limite de durée.
+      const { auth: early } = createTestAuth(t.appDb, hours(1));
+      const session = await early.login(credentials, META);
+      const resolved = await early.resolveSession(session.token);
+      await early.changePassword(
+        resolved!,
+        { currentPassword: user.password, newPassword: 'une phrase de passe choisie' },
+        META,
+      );
+      await expect(
+        later.login({ ...credentials, password: 'une phrase de passe choisie' }, META),
+      ).resolves.toMatchObject({ restriction: null });
+    });
+
     it('réussit et ouvre une session résolvable, auditée', async () => {
       const { auth } = createTestAuth(t.appDb);
       const user = await createUser(t.ownerDb, clinic.id, 'SECRETARY');

@@ -1,5 +1,4 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
@@ -75,7 +74,7 @@ if (migrate.status !== 0) fail('migrations en échec');
 const serverEnv = {
   ...common,
   DATABASE_URL: urls.appUrl,
-  DATA_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+  DATA_ENCRYPTION_KEY: process.env.E2E_DATA_ENCRYPTION_KEY ?? fail('clé de chiffrement absente'),
   SESSION_RETENTION_DAYS: '30',
 };
 function start(name: string, args: string[], env: NodeJS.ProcessEnv, log: string, cwd = ROOT) {

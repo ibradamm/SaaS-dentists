@@ -12,6 +12,7 @@ export default tseslint.config(
       '**/coverage/**',
       '**/node_modules/**',
       'apps/server/src/db/migrations/**',
+      'e2e/artifacts/**',
     ],
   },
   js.configs.recommended,

@@ -24,7 +24,7 @@ import {
 } from '../../lib/queries';
 import { usePatientAppointments } from '../patients/PatientAppointments';
 import { AmountField, amountOf } from './AmountField';
-import { useIdempotencyKey } from './idempotency';
+import { useIdempotencyKey } from '../../lib/idempotency';
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATE_TONES, chargeStateLabel } from './labels';
 
 /** « 28/09/2026 à 10:30 », dans le fuseau du cabinet. */

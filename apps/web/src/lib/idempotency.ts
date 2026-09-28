@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ApiError } from '../../lib/api';
+import { ApiError } from './api';
 
 /** UUID v4. `crypto.randomUUID` n'existe qu'en contexte sécurisé (HTTPS, localhost). */
 export function newIdempotencyKey(): string {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   api,
@@ -130,13 +131,19 @@ test('réseau coupé avant le serveur, puis nouvel essai : enregistré une fois'
   await secretary.unrouteAll();
 });
 
-test('réponse perdue après enregistrement, puis nouvel essai : pas de doublon', async () => {
+test('réponse perdue après enregistrement, puis nouvel essai : enregistré, sans doublon', async () => {
   let lose = true;
   await secretary.route(appointmentsPath, async (route) => {
     if (route.request().method() !== 'POST' || !lose) return route.fallback();
     lose = false;
     await route.fetch(); // la requête atteint le serveur ; la réponse n'arrive jamais
     await route.abort('connectionreset');
+  });
+  const keys: string[] = [];
+  secretary.on('request', (r) => {
+    if (r.method() === 'POST' && appointmentsPath(new URL(r.url()))) {
+      keys.push((r.postDataJSON() as { idempotencyKey: string }).idempotencyKey);
+    }
   });
   const panel = await fillAppointment(secretary, {
     patient: PATIENTS.e[0],
@@ -147,12 +154,67 @@ test('réponse perdue après enregistrement, puis nouvel essai : pas de doublon'
   await saveButton(panel).click();
   await expect(panel.getByRole('alert')).toContainText('Vérifiez votre connexion et réessayez');
   await saveButton(panel).click();
-  const result = await outcome(secretary, panel);
-  // Limite connue (rapport de Phase 10) : pas de clé d'idempotence sur la prise de rendez-vous,
-  // le nouvel essai est refusé comme un conflit ; aucun doublon, le rendez-vous existe.
-  expect(result).toBe('Le praticien a déjà un rendez-vous sur ce créneau');
+  // Même clé d'idempotence : le serveur renvoie le rendez-vous créé par le premier envoi
+  // (corrigé avant la production : auparavant « Le praticien a déjà un rendez-vous… »).
+  expect(await outcome(secretary, panel)).toBe('enregistré');
+  expect(keys).toHaveLength(2);
+  expect(keys[1]).toBe(keys[0]);
   expect(await appointmentsOf(ids.e)).toHaveLength(1);
   await secretary.unrouteAll();
+});
+
+test('API : même saisie envoyée deux fois au même instant, clé réutilisée, nouvelle clé', async () => {
+  // Patient et jour propres à ce test : les autres comptent les rendez-vous de leurs patients.
+  const patientId = await createPatient(clinic.adminPage, PATIENTS.f[0], PATIENTS.f[1]);
+  const day3 = nextWorkday(day2);
+  const body = (start: string, key: string) => ({
+    practitionerId: clinic.practitioners.hygienist,
+    patientId,
+    appointmentTypeId: clinic.types.consultation,
+    start,
+    idempotencyKey: key,
+  });
+  const key = randomUUID();
+  // Deux requêtes identiques simultanées depuis le navigateur (hors regroupement du client).
+  const both = await secretary.evaluate(
+    async (payload) => {
+      const csrf = ((await (await fetch('/api/auth/csrf')).json()) as { csrfToken: string })
+        .csrfToken;
+      const send = () =>
+        fetch('/api/appointments', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },
+          body: JSON.stringify(payload),
+        }).then(async (r) => ({ status: r.status, id: ((await r.json()) as { id?: string }).id }));
+      return Promise.all([send(), send()]);
+    },
+    body(`${day3}T15:00`, key),
+  );
+  expect(both.map((r) => r.status).sort()).toEqual([200, 201]);
+  expect(both[0]?.id).toBe(both[1]?.id);
+  // Même clé, autre demande : refus explicite.
+  const reused = await api<{ error: { code: string } }>(
+    secretary,
+    'POST',
+    '/api/appointments',
+    body(`${day3}T16:30`, key),
+  );
+  expect(reused.status).toBe(409);
+  expect(reused.body.error.code).toBe('CONFLICT');
+  // Nouvelle demande légitime, nouvelle clé : créée normalement.
+  const fresh = await api(
+    secretary,
+    'POST',
+    '/api/appointments',
+    body(`${day3}T16:30`, randomUUID()),
+  );
+  expect(fresh.status).toBe(201);
+  const rows = await sql<{ n: number }>(
+    `select count(*)::int as n from appointments
+      where clinic_id = $1 and patient_id = $2 and status = 'SCHEDULED'`,
+    [clinic.id, patientId],
+  );
+  expect(rows[0]?.n).toBe(2);
 });
 
 test('déplacement vers un créneau libre proposé ; modification concurrente détectée', async () => {

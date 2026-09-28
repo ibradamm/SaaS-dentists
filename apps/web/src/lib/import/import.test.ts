@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mapRows, mappingErrors, suggestMapping } from './mapping';
 import { cellToText, decodeText, parseCsv, toTable } from './table';
+import { readTabularFile } from './read-file';
 
 const encodeLatin1 = (text: string) => new Uint8Array([...text].map((c) => c.charCodeAt(0))).buffer;
 
@@ -42,6 +43,37 @@ describe('lecture des fichiers', () => {
     });
     expect(() => toTable([])).toThrow('vide');
     expect(() => toTable([['Nom']])).toThrow("qu'une ligne");
+  });
+});
+
+describe('contenu réel des fichiers (sans se fier à l’extension ni au type annoncé)', () => {
+  const file = (bytes: number[] | string, name: string, type = '') =>
+    new File([typeof bytes === 'string' ? bytes : new Uint8Array(bytes)], name, { type });
+
+  it('refuse un .xlsx qui n’est pas une archive ZIP, même annoncé comme Excel', async () => {
+    const fake = file(
+      'Nom;Prénom\nDurand;Alice\n',
+      'patients.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    await expect(readTabularFile(fake)).rejects.toThrow(/pas un classeur Excel \(\.xlsx\) valide/);
+  });
+
+  it('refuse un ancien .xls renommé en .xlsx, et un classeur renommé en .csv', async () => {
+    const ole = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0];
+    await expect(readTabularFile(file(ole, 'ancien.xlsx'))).rejects.toThrow(/Ancien format/);
+    const zip = [0x50, 0x4b, 0x03, 0x04, 0x14, 0, 0, 0];
+    await expect(readTabularFile(file(zip, 'classeur.csv', 'text/csv'))).rejects.toThrow(
+      /classeur Excel renommé/,
+    );
+  });
+
+  it('refuse un fichier binaire présenté comme CSV ; accepte un vrai CSV', async () => {
+    await expect(
+      readTabularFile(file([0x4e, 0x6f, 0x6d, 0x00, 0x01, 0x02], 'image.csv', 'text/csv')),
+    ).rejects.toThrow(/contenu binaire/);
+    const table = await readTabularFile(file('Nom;Prénom\nDurand;Alice\n', 'patients.csv'));
+    expect(table.rows).toHaveLength(1);
   });
 });
 

@@ -134,6 +134,13 @@
       "when": 1790537422004,
       "tag": "0018_retention_security",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790610874917,
+      "tag": "0019_appointment_idempotency",
+      "breakpoints": true
     }
   ]
 }

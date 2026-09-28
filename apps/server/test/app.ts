@@ -37,6 +37,7 @@ export async function buildTestApp(
     secretBox?: SecretBox;
     logger?: Logger;
     errorReporter?: ErrorReporter;
+    trustProxyHops?: number;
   } = {},
 ): Promise<FastifyInstance> {
   const logger = options.logger ?? pino({ level: 'silent' });
@@ -46,7 +47,7 @@ export async function buildTestApp(
   const app = await buildApp({
     logger,
     pool,
-    trustProxyHops: 0,
+    trustProxyHops: options.trustProxyHops ?? 0,
     auth: createAuthService({ db, secretBox, logger, ...now }),
     users: createUsersService({ db }),
     clinic: createClinicService({ db }),

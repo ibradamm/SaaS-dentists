@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { openTestDatabase } from '../../../test/db';
-import { DB_APP_ROLE } from '../roles';
+import { DB_APP_ROLE, DB_OWNER_ROLE } from '../roles';
 
 /**
  * Garde-fou structurel : toute table du schéma public doit être protégée par RLS. Ce test
@@ -60,6 +60,37 @@ describe('catalogue du schéma', () => {
       [DB_APP_ROLE],
     );
     expect(rows[0]).toEqual({ rolsuper: false, rolbypassrls: false, owned: 0 });
+  });
+
+  it('le rôle propriétaire ne contourne pas la RLS (ni superutilisateur, ni BYPASSRLS)', async () => {
+    const { rows } = await t.ownerPool.query<{
+      role: string;
+      rolsuper: boolean;
+      rolbypassrls: boolean;
+    }>(
+      `SELECT rolname AS role, rolsuper, rolbypassrls FROM pg_roles
+        WHERE rolname = ANY($1) ORDER BY rolname`,
+      [[DB_APP_ROLE, DB_OWNER_ROLE]],
+    );
+    expect(rows).toEqual([
+      { role: DB_APP_ROLE, rolsuper: false, rolbypassrls: false },
+      { role: DB_OWNER_ROLE, rolsuper: false, rolbypassrls: false },
+    ]);
+  });
+
+  it('journal du serveur PostgreSQL sans valeurs en conflit (terse), non modifiable par l’application', async () => {
+    const client = await t.appPool.connect();
+    try {
+      const { rows } = await client.query<{ log_error_verbosity: string }>(
+        'SHOW log_error_verbosity',
+      );
+      expect(rows[0]?.log_error_verbosity).toBe('terse');
+      await expect(client.query("SET log_error_verbosity TO 'verbose'")).rejects.toMatchObject({
+        code: '42501',
+      });
+    } finally {
+      client.release();
+    }
   });
 
   it("le journal d'audit est en ajout seul pour le rôle applicatif", async () => {

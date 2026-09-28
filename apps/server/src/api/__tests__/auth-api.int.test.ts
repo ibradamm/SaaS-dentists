@@ -217,6 +217,81 @@ describe('API d’authentification', () => {
     }
   });
 
+  it('derrière un proxy (API_TRUST_PROXY_HOPS=1) : limite par client réel, X-Forwarded-For usurpé sans effet', async () => {
+    const limits = {
+      global: { max: 1000, timeWindow: '1 minute' },
+      sensitive: { max: 3, timeWindow: '1 minute' },
+    };
+    const attempt = (target: FastifyInstance, forwardedFor: string) =>
+      target.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        // Le proxy ajoute l'adresse réelle du client à la fin de l'en-tête reçu.
+        headers: { 'x-forwarded-for': forwardedFor },
+        payload: { email: uniqueEmail(), password: 'x' },
+      });
+    const behindProxy = await buildTestApp(t.appPool, { rateLimits: limits, trustProxyHops: 1 });
+    try {
+      // Le client usurpe une adresse différente à chaque essai : la limite s'applique quand même.
+      const spoofed = [];
+      for (let i = 0; i < 4; i++) {
+        spoofed.push((await attempt(behindProxy, `198.51.100.${i}, 203.0.113.7`)).statusCode);
+      }
+      expect(spoofed).toEqual([401, 401, 401, 429]);
+      // Un autre poste (autre adresse réelle) n'est pas bloqué par le premier.
+      expect((await attempt(behindProxy, '203.0.113.8')).statusCode).toBe(401);
+    } finally {
+      await behindProxy.close();
+    }
+    // Sans proxy déclaré (0) : l'en-tête est ignoré, l'adresse est celle de la connexion.
+    const direct = await buildTestApp(t.appPool, { rateLimits: limits, trustProxyHops: 0 });
+    try {
+      const codes = [];
+      for (let i = 0; i < 4; i++)
+        codes.push((await attempt(direct, `203.0.113.${20 + i}`)).statusCode);
+      expect(codes).toEqual([401, 401, 401, 429]);
+    } finally {
+      await direct.close();
+    }
+  });
+
+  it('limite aussi la création de comptes et la réinitialisation de mot de passe', async () => {
+    const strict = await buildTestApp(t.appPool, {
+      now: clock.now,
+      secretBox,
+      rateLimits: {
+        global: { max: 1000, timeWindow: '1 minute' },
+        sensitive: { max: 2, timeWindow: '1 minute' },
+      },
+    });
+    try {
+      const user = await createUser(t.ownerDb, clinic.id, 'ADMIN');
+      const secret = await enableMfa(t.ownerDb, clinic.id, user.id, secretBox);
+      const b = browser(strict);
+      await b.login(user.email, user.password);
+      clock.advanceSeconds(30);
+      await b.post('/api/auth/mfa/verify', { code: await totpAt(secret, clock.epochSeconds()) });
+      const create = () =>
+        b.post('/api/users', {
+          email: uniqueEmail('limite'),
+          fullName: 'Limite',
+          role: 'SECRETARY',
+        });
+      const created = [await create(), await create()];
+      expect(created.map((r) => r.statusCode)).toEqual([201, 201]);
+      const blocked = await create();
+      expect(blocked.statusCode).toBe(429);
+      expect(blocked.json()).toMatchObject({ error: { code: 'RATE_LIMITED' } });
+      const target = created[0]!.json<{ user: { id: string } }>().user.id;
+      const resets = [];
+      for (let i = 0; i < 3; i++)
+        resets.push((await b.post(`/api/users/${target}/reset-password`)).statusCode);
+      expect(resets).toEqual([200, 200, 429]);
+    } finally {
+      await strict.close();
+    }
+  });
+
   describe('permissions au niveau HTTP (chaque rôle × chaque route protégée)', () => {
     const routes = [
       {

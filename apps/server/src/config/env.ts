@@ -60,7 +60,9 @@ const apiSchema = z
     API_HOST: z.string().min(1).default('127.0.0.1'),
     API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     // Nombre de proxys de confiance devant l'API (Caddy en production = 1). 0 = aucun.
-    API_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+    // Obligatoire en staging et production : la valeur par défaut (0) derrière un proxy ferait
+    // partager une seule adresse IP à tous les postes (limitation de débit, journal d'audit).
+    API_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).optional(),
     // Origine de l'interface web : seule origine acceptée pour les requêtes modifiantes.
     WEB_ORIGIN: z.url().optional(),
     // Limitation du nombre de requêtes par adresse IP et par minute (docs/adr/0003) : toutes
@@ -83,6 +85,13 @@ const apiSchema = z
         message: 'obligatoire en staging et production',
       });
     }
+    if (deployed && config.API_TRUST_PROXY_HOPS === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['API_TRUST_PROXY_HOPS'],
+        message: 'obligatoire en staging et production (nombre de proxys devant l’API)',
+      });
+    }
     if (deployed && config.WEB_ORIGIN && !config.WEB_ORIGIN.startsWith('https://')) {
       ctx.addIssue({
         code: 'custom',
@@ -94,6 +103,7 @@ const apiSchema = z
   .transform((config) => ({
     ...config,
     WEB_ORIGIN: new URL(config.WEB_ORIGIN ?? DEV_WEB_ORIGIN).origin,
+    API_TRUST_PROXY_HOPS: config.API_TRUST_PROXY_HOPS ?? 0,
     // Cookies « Secure » dès qu'on n'est plus en local.
     SECURE_COOKIES: config.APP_ENV === 'production' || config.APP_ENV === 'staging',
   }));

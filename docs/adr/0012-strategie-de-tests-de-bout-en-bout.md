@@ -19,6 +19,8 @@ Un paquet `e2e` (Playwright, Chromium) exécute les parcours sur la **pile de pr
 Règles :
 - **Aucune relance automatique** d'un test en échec (`retries: 0`) : un test instable doit se voir et se corriger.
 - **Contrôles indépendants** : les chiffres affichés (revenus, restant dû, statistiques, journal) sont comparés à une requête SQL écrite dans le test (superutilisateur, sans RLS), pas à l'API.
+- **CSP de production appliquée** : l'interface est servie avec les en-têtes de `apps/web/security-headers.ts`. Toute violation de la CSP sur une page principale fait échouer les parcours (ajout du 2026-09-28).
+- **Secrets de l'exécution** : la clé de chiffrement est tirée par le lanceur. Le contrôle final vérifie qu'elle n'apparaît dans aucun journal, pas plus que les mots de passe des rôles PostgreSQL, le cookie de session ou les en-têtes d'authentification (ajout du 2026-09-28).
 - **Données sentinelles** : noms de patients, notes, téléphone, mot de passe et motifs saisis par les tests sont connus. À la fin de l'exécution, les journaux réels de l'API et du worker, le journal d'audit et la file de tâches (pg-boss) ne doivent en contenir aucun, sinon l'exécution échoue.
 - **Volume** : un cabinet reçoit un an d'activité écrit directement en base (5 000 patients, environ 6 000 rendez-vous, actes, paiements, 100 000 entrées de journal) pour mesurer pages et charge.
 - **Restauration** : la base de l'exécution est sauvegardée (`pg_dump`) puis restaurée dans une base neuve ; données, RLS, politiques, droits et migrations sont comparés.

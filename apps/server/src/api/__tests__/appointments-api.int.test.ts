@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import {
   appointmentSchema,
   listAppointmentsResponseSchema,
@@ -185,6 +185,39 @@ describe('API rendez-vous', () => {
       s2.post('/api/appointments', booking(p2, '2026-10-02T10:00')),
     ]);
     expect(responses.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+  });
+
+  it('clé d’idempotence : 201 puis 200 avec le même rendez-vous ; envois simultanés ; clé invalide 400', async () => {
+    const patient = await newPatient();
+    const key = randomUUID();
+    const body = booking(patient, '2026-10-07T09:00', { idempotencyKey: key });
+    const first = await admin.post('/api/appointments', body);
+    const again = await admin.post('/api/appointments', body);
+    expect([first.statusCode, again.statusCode]).toEqual([201, 200]);
+    expect(appointmentSchema.parse(again.json())).toEqual(appointmentSchema.parse(first.json()));
+    // Deux postes envoient la même saisie au même instant : un seul rendez-vous.
+    const [s1, s2] = [await signedIn('SECRETARY'), await signedIn('SECRETARY')];
+    const shared = booking(await newPatient(), '2026-10-07T10:00', {
+      idempotencyKey: randomUUID(),
+    });
+    const both = await Promise.all([
+      s1.post('/api/appointments', shared),
+      s2.post('/api/appointments', shared),
+    ]);
+    expect(both.map((r) => r.statusCode).sort()).toEqual([200, 201]);
+    expect(new Set(both.map((r) => appointmentSchema.parse(r.json()).id)).size).toBe(1);
+    // Même clé, autre demande : 409 ; clé qui n'est pas un UUID : 400.
+    const other = await admin.post(
+      '/api/appointments',
+      booking(patient, '2026-10-07T11:00', { idempotencyKey: key }),
+    );
+    expect(other.statusCode).toBe(409);
+    expect(other.json()).toMatchObject({ error: { code: 'CONFLICT' } });
+    const invalid = await admin.post(
+      '/api/appointments',
+      booking(patient, '2026-10-07T11:00', { idempotencyKey: 'pas-une-cle' }),
+    );
+    expect(invalid.statusCode).toBe(400);
   });
 
   it('validation 400, patient inconnu 404, transition impossible 409', async () => {

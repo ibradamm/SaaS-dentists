@@ -12,7 +12,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDS, appointment, clinic, patientDetail, practitioner } from '../../test/fixtures';
 import { me, mockApi, renderApp, type MockCall } from '../../test/render';
-import { newIdempotencyKey } from './idempotency';
+import { newIdempotencyKey } from '../../lib/idempotency';
 import { periodPresets } from './RevenuePage';
 
 // Lundi 28 septembre 2026, 10 h à Paris : seule l'horloge est simulée.

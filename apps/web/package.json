@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
-    "check:bundle": "node scripts/check-bundle.mjs"
+    "check:bundle": "node scripts/check-bundle.mjs && node scripts/check-secrets.mjs"
   },
   "dependencies": {
     "@dental/shared": "workspace:*",

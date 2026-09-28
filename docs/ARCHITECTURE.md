@@ -227,15 +227,15 @@ Double authentification obligatoire pour ADMIN et DENTIST.
 
 | Domaine | Mesure |
 |---|---|
-| Transport | TLS (Caddy), HSTS, cookies `Secure` et `__Host-` hors développement |
-| Authentification | Argon2id, verrouillage, sessions révocables, TOTP, renouvellement du jeton à chaque élévation (ADR 0003) ; tentatives sérialisées par adresse, codes TOTP faux comptés pour le compte (ADR 0011) |
+| Transport | TLS (Caddy), HSTS, cookies `Secure` et `__Host-` hors développement ; `API_TRUST_PROXY_HOPS` obligatoire en staging et production ; vérification d'un déploiement : `pnpm --filter @dental/e2e check:deployment` |
+| Authentification | Argon2id, verrouillage, sessions révocables, TOTP, renouvellement du jeton à chaque élévation (ADR 0003) ; tentatives sérialisées par adresse, codes TOTP faux comptés pour le compte (ADR 0011) ; mot de passe temporaire valable 72 h ; création de compte et réinitialisation limitées comme la connexion |
 | Requêtes | Politique d'accès obligatoire sur chaque route, vérifiée avant la lecture du corps ; jeton CSRF et vérification de l'origine ; limitation du nombre de requêtes ; taille des corps limitée ; en-têtes de sécurité (helmet) ; matrice de toutes les routes testée (ADR 0011) |
 | Autorisation | Permissions dans les services et les routes, RLS, clés composites, droits par colonne |
 | Validation | Zod sur chaque entrée ; requêtes paramétrées uniquement |
-| Données sensibles | Notes médicales et secrets TOTP chiffrés (AES-256-GCM), clé hors base ; lecture des notes médicales auditée |
+| Données sensibles | Notes médicales et secrets TOTP chiffrés (AES-256-GCM), clé hors base ; lecture des notes médicales auditée ; procédure de la clé : `docs/operations/cle-de-chiffrement.md` |
 | Secrets | Variables d'environnement et gestionnaire de secrets ; gitleaks en CI ; `.env` exclu de Git |
-| Interface | Pages chargées à la demande ; cache des requêtes vidé à tout changement de session (compte, cabinet, expiration) et retour à la connexion sur une réponse 401 (ADR 0008) |
-| Logs et audit | Aucune donnée patient dans les logs (chemin des requêtes sans chaîne de requête, corps masqués, erreurs par liste blanche) ; l'audit ne recopie pas les valeurs modifiées (noms de champs seulement) ; catalogue fermé des actions |
+| Interface | Pages chargées à la demande ; cache des requêtes vidé à tout changement de session (compte, cabinet, expiration) et retour à la connexion sur une réponse 401 (ADR 0008) ; en-têtes de sécurité définis dans `apps/web/security-headers.ts` (CSP stricte sans `unsafe-inline` ni `unsafe-eval`, vérifiée sur toutes les pages par les parcours) ; aucun secret dans le build (`check:bundle`) |
+| Logs et audit | Aucune donnée patient dans les logs (chemin des requêtes sans chaîne de requête, corps masqués, erreurs par liste blanche) ; l'audit ne recopie pas les valeurs modifiées (noms de champs seulement) ; catalogue fermé des actions ; journal du serveur PostgreSQL sans valeurs en conflit (`log_error_verbosity = terse`, posé par le bootstrap) |
 | Sauvegardes | PostgreSQL managé avec restauration à un instant donné ; test de restauration documenté (Phase 11) |
 
 ### G.2 Durées de conservation (proposition technique, à valider juridiquement)
@@ -267,8 +267,8 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | 7 | Paiements et revenus encaissés : actes à encaisser, paiements partiels, restant dû, annulations motivées, « À encaisser », revenus par période (ADR 0009) | 14 | Fait |
 | 8 | Tableau de bord et statistiques : indicateurs du jour sur l'accueil, page « Statistiques » par période et praticien, calculs en base dans le fuseau du cabinet (ADR 0010) | 15, 16 | Fait |
 | 9 | Journal d'audit consultable et revue de sécurité : page « Journal », matrice de toutes les routes, fuite entre cabinets, tentatives simultanées, journaux sans donnée patient, remontée des erreurs, conservation (ADR 0011) | 17, 18 | Fait |
-| 10 | Tests complets et validation globale : parcours de bout en bout sur la pile de production en CI (trois rôles, concurrence, réseau, changement d'heure, isolation, accessibilité, responsive), charge, restauration, démonstration (ADR 0012, `docs/demo.md`) | 19 | Fait (en attente de validation) |
-| 11 | Déploiement : hébergement, secrets, sauvegardes, supervision, procédures | 20 | À faire |
+| 10 | Tests complets et validation globale : parcours de bout en bout sur la pile de production en CI (trois rôles, concurrence, réseau, changement d'heure, isolation, accessibilité, responsive), charge, restauration, démonstration (ADR 0012, `docs/demo.md`) | 19 | Fait |
+| 11 | Déploiement : hébergement, secrets, sauvegardes, supervision, procédures. Audit de sécurité pré-production (gate bloquant) : `docs/phases/phase-11-audit-preproduction.md` | 20 | En cours : mise en production bloquée (hébergement à choisir, vérifications staging) |
 
 ---
 

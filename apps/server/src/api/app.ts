@@ -99,7 +99,7 @@ export async function buildApp(deps: AppDependencies): Promise<FastifyInstance> 
 
   healthRoutes(app, { pool: deps.pool });
   authRoutes(app, { auth: deps.auth, cookies, sensitiveRateLimit: limits.sensitive });
-  usersRoutes(app, { users: deps.users });
+  usersRoutes(app, { users: deps.users, sensitiveRateLimit: limits.sensitive });
   clinicRoutes(app, { clinic: deps.clinic });
   patientsRoutes(app, { patients: deps.patients });
   importsRoutes(app, { imports: deps.imports });

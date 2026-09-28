@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { clinicIdColumn, createdAt, primaryId, updatedAt } from './_columns';
@@ -62,6 +63,9 @@ export const appointments = pgTable(
     cancelledBy: uuid('cancelled_by'),
     cancellationReason: text('cancellation_reason'),
     createdBy: uuid('created_by'),
+    // Clé d'une saisie de création (docs/adr/0007, section idempotence) : un nouvel essai après
+    // une réponse perdue renvoie le rendez-vous déjà créé. Unique par cabinet ; jamais modifiée.
+    idempotencyKey: uuid('idempotency_key'),
     version: integer('version').notNull().default(1),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -84,6 +88,9 @@ export const appointments = pgTable(
     }),
     // Cible de la clé composite des montants dus : le rendez-vous est celui du même patient.
     unique('appointments_clinic_id_patient_key').on(t.clinicId, t.id, t.patientId),
+    uniqueIndex('appointments_clinic_idempotency_key')
+      .on(t.clinicId, t.idempotencyKey)
+      .where(sql`${t.idempotencyKey} is not null`),
     index('appointments_clinic_start_idx').on(t.clinicId, t.startAt),
     index('appointments_practitioner_start_idx').on(t.practitionerId, t.startAt),
     index('appointments_patient_start_idx').on(t.patientId, t.startAt),

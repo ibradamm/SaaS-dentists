@@ -10,6 +10,9 @@ export const emailSchema = z
   .toLowerCase()
   .pipe(z.email({ error: 'Adresse e-mail invalide' }).max(254));
 
+/** Durée de validité d'un mot de passe temporaire (création du compte, réinitialisation). */
+export const TEMPORARY_PASSWORD_HOURS = 72;
+
 export const newPasswordSchema = z
   .string()
   .min(PASSWORD_MIN_LENGTH, `${PASSWORD_MIN_LENGTH} caractères minimum`)

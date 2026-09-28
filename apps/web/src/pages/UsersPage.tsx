@@ -1,4 +1,10 @@
-import { ROLE_LABELS, ROLES, type ClinicUser, type Role } from '@dental/shared';
+import {
+  ROLE_LABELS,
+  ROLES,
+  TEMPORARY_PASSWORD_HOURS,
+  type ClinicUser,
+  type Role,
+} from '@dental/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Alert, Button, Loading, SelectField, TextField } from '../components/ui';
@@ -20,7 +26,8 @@ function TemporaryPassword({
     <Alert tone="success">
       <p>
         Mot de passe temporaire pour <strong>{email}</strong>, à transmettre à la personne. Il ne
-        sera plus affiché ; il devra être changé à la première connexion.
+        sera plus affiché ; il devra être changé à la première connexion. Il est valable{' '}
+        {TEMPORARY_PASSWORD_HOURS} heures.
       </p>
       <code className="my-2 block rounded bg-white p-2 text-base tracking-wide">{password}</code>
       <Button variant="secondary" onClick={onDone}>

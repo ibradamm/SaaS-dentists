@@ -231,6 +231,46 @@ describe('API patients et import', () => {
     }));
     expect((await b.post(`/api/imports/${created.id}/rows`, { rows })).statusCode).toBe(400);
   });
+  it('limites de l’import vérifiées par le serveur : volume annoncé, lignes, champs, corps de 5 Mo au plus', async () => {
+    const b = await signedIn('ADMIN');
+    const start = async (totalRows: number) =>
+      b.post('/api/imports', {
+        kind: 'PATIENTS',
+        fileName: 'f.csv',
+        totalRows,
+        dateFormat: 'DD/MM/YYYY',
+      });
+    expect((await start(20_001)).statusCode).toBe(400);
+    const created = importSummarySchema.parse((await start(2)).json());
+    const row = (line: number, extra: Record<string, unknown> = {}) => ({
+      line,
+      lastName: 'A',
+      firstName: 'B',
+      ...extra,
+    });
+    // Plus de lignes que le nombre annoncé.
+    const tooMany = await b.post(`/api/imports/${created.id}/rows`, {
+      rows: [row(2), row(3), row(4)],
+    });
+    expect(tooMany.statusCode).toBe(400);
+    // Champ trop long, téléphones en trop, champ inconnu ignoré sans erreur serveur.
+    for (const extra of [
+      { lastName: 'x'.repeat(501) },
+      { phones: ['0612345678', '0612345679', '0612345670', '0612345671'] },
+      { administrativeNote: 'x'.repeat(5001) },
+    ]) {
+      const res = await b.post(`/api/imports/${created.id}/rows`, { rows: [row(2, extra)] });
+      expect(res.statusCode).toBe(400);
+    }
+    // Corps au-delà de la limite du paquet de lignes (5 Mo) : refusé avant l'analyse (413).
+    const huge = await b.post(`/api/imports/${created.id}/rows`, {
+      rows: Array.from({ length: 300 }, (_, i) =>
+        row(i + 2, { administrativeNote: 'x'.repeat(20_000) }),
+      ),
+    });
+    expect(huge.statusCode).toBe(413);
+  });
+
   it('les journaux ne contiennent ni la chaîne de requête ni les données recherchées', async () => {
     const s = await signedIn('SECRETARY');
     expect((await s.get('/api/patients?q=Zorglub-Confidentiel')).statusCode).toBe(200);

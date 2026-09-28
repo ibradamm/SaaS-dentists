@@ -15,6 +15,7 @@ import { formatTime, localDateTimeOf } from '../../lib/dates';
 import { formatDate } from '../../lib/format-date';
 import { formatPhone } from '../../lib/format';
 import { useDebounced } from '../../lib/hooks';
+import { useIdempotencyKey } from '../../lib/idempotency';
 import { OVERRIDE_REASON_LABELS } from './labels';
 import { QuickPatientForm } from './QuickPatientForm';
 
@@ -106,6 +107,10 @@ export function AppointmentForm(props: Props) {
     enabled: Boolean(values.practitionerId && values.date && duration),
   });
 
+  // Clé de la saisie (ADR 0007) : gardée pour chaque nouvel essai tant que l'issue est inconnue
+  // (réseau coupé, réponse perdue, erreur serveur) ; le serveur renvoie alors le rendez-vous
+  // déjà créé au lieu de refuser un créneau « déjà pris » par cette même saisie.
+  const idempotency = useIdempotencyKey();
   const save = useMutation({
     mutationFn: (allowOutsideAvailability: boolean) => {
       const start = `${values.date}T${values.time}`;
@@ -119,6 +124,7 @@ export function AppointmentForm(props: Props) {
           durationMinutes: duration ?? 0,
           note,
           allowOutsideAvailability,
+          idempotencyKey: idempotency.key,
         });
       }
       // Seuls les champs modifiés sont envoyés : le serveur ne revérifie le créneau que si le
@@ -137,8 +143,12 @@ export function AppointmentForm(props: Props) {
         allowOutsideAvailability,
       });
     },
-    onSuccess: props.onSaved,
+    onSuccess: (appointment) => {
+      idempotency.renew();
+      props.onSaved(appointment);
+    },
     onError: (error) => {
+      idempotency.afterError(error);
       if (error instanceof ApiError && error.code === 'AVAILABILITY_CONFIRMATION_REQUIRED') {
         setConfirmation({ message: error.message, reasons: error.reasons });
       }

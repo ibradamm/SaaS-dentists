@@ -15,7 +15,16 @@ export interface BootstrapOptions {
 
 const DATABASE_NAME = /^[a-z_][a-z0-9_]{0,62}$/;
 
-export async function bootstrapDatabase(options: BootstrapOptions): Promise<void> {
+export interface BootstrapResult {
+  /**
+   * Journal du serveur PostgreSQL sans la ligne DETAIL (valeurs des clés en conflit).
+   * `false` : réglage refusé par l'hébergeur (compte d'administration sans le droit), à faire
+   * dans sa configuration.
+   */
+  terseServerLog: boolean;
+}
+
+export async function bootstrapDatabase(options: BootstrapOptions): Promise<BootstrapResult> {
   if (!DATABASE_NAME.test(options.databaseName)) {
     throw new Error('Nom de base invalide');
   }
@@ -34,8 +43,25 @@ export async function bootstrapDatabase(options: BootstrapOptions): Promise<void
     await admin.query(`REVOKE ALL ON DATABASE ${db} FROM PUBLIC`);
     await admin.query(`GRANT CONNECT, TEMPORARY ON DATABASE ${db} TO ${DB_APP_ROLE}`);
     await admin.query(`GRANT ALL ON DATABASE ${db} TO ${DB_OWNER_ROLE}`);
+    return { terseServerLog: await terseServerLog(admin, db) };
   } finally {
     await admin.end();
+  }
+}
+
+/**
+ * Une violation de contrainte écrit dans le journal du serveur PostgreSQL une ligne DETAIL qui
+ * cite les valeurs en conflit : adresse e-mail, numéro de téléphone d'un patient, numéro de
+ * dossier. Ce journal est lu par l'exploitant et l'hébergeur : `terse` supprime cette ligne
+ * (le code d'erreur, la contrainte et la requête sans valeurs restent). Paramètre réservé au
+ * superutilisateur : refusé sur certains services gérés, où il se règle dans la configuration.
+ */
+async function terseServerLog(admin: pg.Client, db: string): Promise<boolean> {
+  try {
+    await admin.query(`ALTER DATABASE ${db} SET log_error_verbosity TO 'terse'`);
+    return true;
+  } catch {
+    return false;
   }
 }
 

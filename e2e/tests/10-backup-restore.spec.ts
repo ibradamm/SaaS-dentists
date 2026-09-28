@@ -1,10 +1,14 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import pg from 'pg';
+import { createSecretBox, parseEncryptionKey } from '../../apps/server/src/lib/secret-box';
+import { api, createPatient, setupClinic, signIn } from '../support/app';
 import { DATABASE_NAME, databaseUrls } from '../support/env';
+import { MEDICAL_NOTE, PATIENTS } from '../support/sentinels';
 
 /*
  * Sauvegarde et restauration de la base réelle des parcours (tout ce que les tests précédents
@@ -73,7 +77,18 @@ async function fingerprint(url: string) {
   return { rows, security, grants: grants.map((g) => g.grant), owners };
 }
 
-test('sauvegarde puis restauration dans une base neuve : données, isolation et droits intacts', async () => {
+test('sauvegarde puis restauration dans une base neuve : données, isolation et droits intacts', async ({
+  browser,
+}) => {
+  // Une note médicale chiffrée par l'application, pour le scénario de la clé plus bas.
+  const clinic = await setupClinic(browser, 'Cabinet Sauvegardé');
+  const patientId = await createPatient(clinic.adminPage, ...PATIENTS.d);
+  const dentist = await signIn(browser, clinic.dentist);
+  const note = await api(dentist, 'POST', `/api/patients/${patientId}/medical-notes`, {
+    content: MEDICAL_NOTE,
+  });
+  expect(note.status).toBe(204);
+  await dentist.context().close();
   const source = urls.inspectUrl;
   const restored = withDatabase(urls.inspectUrl, RESTORED);
   const dir = mkdtempSync(path.join(tmpdir(), 'dental-sauvegarde-'));
@@ -138,6 +153,26 @@ test('sauvegarde puis restauration dans une base neuve : données, isolation et 
     } finally {
       await app.end();
     }
+
+    // Clé de chiffrement (DATA_ENCRYPTION_KEY) : absente de la sauvegarde, indispensable pour
+    // relire les notes médicales. Base restaurée + clé restaurée depuis son propre coffre :
+    // notes lisibles ; avec une autre clé : refus (chiffrement authentifié), jamais un texte faux.
+    const plain = path.join(dir, 'base.sql');
+    execFileSync('pg_dump', ['--format=plain', '--file', plain, source], { stdio: 'pipe' });
+    const key = process.env.E2E_DATA_ENCRYPTION_KEY ?? '';
+    expect(key.length).toBeGreaterThan(40);
+    expect(readFileSync(plain, 'utf8').includes(key)).toBe(false);
+    const [stored] = await query<{ id: string; content_enc: string }>(
+      restored,
+      `select n.id, n.content_enc from patient_medical_notes n where n.patient_id = $1`,
+      [patientId],
+    );
+    expect(stored?.content_enc.startsWith('v1.')).toBe(true);
+    const context = `patient_medical_notes:${stored!.id}`;
+    expect(createSecretBox(parseEncryptionKey(key)).decrypt(stored!.content_enc, context)).toBe(
+      MEDICAL_NOTE,
+    );
+    expect(() => createSecretBox(randomBytes(32)).decrypt(stored!.content_enc, context)).toThrow();
   } finally {
     rmSync(dir, { recursive: true, force: true });
     await query(urls.adminUrl, `drop database if exists ${RESTORED} with (force)`);

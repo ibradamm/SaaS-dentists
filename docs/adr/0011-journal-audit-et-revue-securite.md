@@ -159,6 +159,7 @@ Observation sans faille : sans le contrôle de permission de la route, 16 routes
   - L'API envoie ses en-têtes (helmet). Les fichiers de l'interface seront servis par l'hébergeur ou Caddy (Phase 11).
   - Ils devront porter au minimum : CSP (`default-src 'self'`, `frame-ancestors 'none'`), HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`.
   - Rien n'est vérifiable avant le choix de l'hébergement.
+  - Mise à jour du 2026-09-28 (audit pré-production) : ces en-têtes sont désormais définis dans `apps/web/security-headers.ts`, servis par la pile de bout en bout et vérifiés sur toutes les pages (aucune violation de la CSP). Il reste à les poser sur l'hébergement réel et à le vérifier avec `check:deployment`.
 - **Autres points à régler en Phase 11.**
   - Le limiteur de débit est en mémoire (une seule instance d'API).
   - `API_TRUST_PROXY_HOPS` doit correspondre au nombre réel de proxys, sinon l'adresse IP (limitation, journal) est fausse.

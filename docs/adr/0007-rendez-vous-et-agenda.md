@@ -151,3 +151,21 @@ Une version périmée garde le code `CONFLICT` : il faut recharger.
 | Suppression physique des rendez-vous | Perte d'historique ; l'annulation suffit |
 | Vérifier les chevauchements seulement dans le code | Ne résiste pas à deux requêtes simultanées ; la base doit être la garantie finale |
 | Dérogation possible pendant une absence | Refusée par décision du porteur du projet |
+
+## 11. Idempotence de la création (ajout du 2026-09-28, avant la mise en production)
+
+- **Constat de la Phase 10.** Si la réponse se perdait après l'enregistrement (réseau instable), le nouvel essai était refusé : « Le praticien a déjà un rendez-vous sur ce créneau ». Il n'y avait aucun doublon, mais la personne pouvait croire à un échec et reprendre un autre créneau.
+- **Décision.** La création accepte une clé d'idempotence (`idempotencyKey`, UUID), sur le modèle des encaissements (ADR 0009).
+  - **Côté interface :** la clé est tirée pour chaque saisie. Elle est gardée pour chaque nouvel essai tant que l'issue est inconnue (réseau, erreur serveur). Elle est renouvelée après un succès ou un refus du serveur (4xx).
+  - **Côté serveur :** la recherche par clé se fait **après le verrou du praticien** et **avant** tout contrôle de créneau. Deux envois simultanés de la même saisie sont ainsi sérialisés : le second retrouve le premier.
+    - Même demande : 200 avec le rendez-vous déjà créé, sans nouvelle trace d'audit.
+    - Autre demande avec la même clé : 409 `CONFLICT`.
+  - **En base :** colonne `idempotency_key` avec un index unique partiel `(clinic_id, idempotency_key)` (migration 0019). La clé est propre à chaque cabinet : la même clé dans un autre cabinet ne révèle rien et ne bloque rien. Le rôle applicatif ne peut pas la modifier (absente de la liste `GRANT UPDATE`).
+  - **Clé facultative** pour un appelant qui n'en a pas besoin. L'interface l'envoie toujours.
+- **Rendez-vous annulé puis clé rejouée :** le rendez-vous annulé est renvoyé tel quel, jamais recréé.
+- **Tests :**
+  - service : même clé, cinq envois simultanés, autre demande, nouvelle clé, annulation, autre cabinet ;
+  - HTTP : 201 puis 200, deux postes simultanés, 409, clé invalide 400 ;
+  - interface : clé gardée après une coupure, nouvelle clé après un refus et pour une nouvelle saisie ;
+  - bout en bout : réponse perdue puis nouvel essai enregistré, envois simultanés, clé réutilisée, nouvelle clé ;
+  - 5 failles volontaires, toutes détectées.

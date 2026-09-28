@@ -325,7 +325,10 @@ describe('agenda', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Enregistrer le rendez-vous' }));
     expect(await within(form).findByText(/en dehors des horaires/)).toBeInTheDocument();
     expect(posts(calls, '/api/appointments')).toHaveLength(1);
-    expect(posts(calls, '/api/appointments')[0]?.body).toEqual({
+    const { idempotencyKey, ...firstBody } = posts(calls, '/api/appointments')[0]?.body as {
+      idempotencyKey: string;
+    };
+    expect(firstBody).toEqual({
       practitionerId: DR_ALPHA,
       patientId: PATIENT,
       appointmentTypeId: TYPE_CONSULT,
@@ -334,6 +337,9 @@ describe('agenda', () => {
       note: null,
       allowOutsideAvailability: false,
     });
+    expect(idempotencyKey).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
 
     // Modifier la saisie annule la demande de confirmation.
     fireEvent.change(within(form).getByLabelText('Heure'), { target: { value: '19:30' } });
@@ -349,6 +355,37 @@ describe('agenda', () => {
       ['2026-09-28T19:30', false],
       ['2026-09-28T19:30', true],
     ]);
+    // Un refus du serveur (4xx) n'a rien créé : chaque envoi suivant porte une nouvelle clé.
+    const keys = posts(calls, '/api/appointments').map(
+      (c) => (c.body as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(new Set(keys).size).toBe(3);
+  });
+
+  it('réseau coupé puis nouvel essai : même clé d’idempotence ; saisie suivante : nouvelle clé', async () => {
+    let attempts = 0;
+    const calls = setup('SECRETARY', {
+      'POST /api/appointments': () => {
+        attempts += 1;
+        // Issue inconnue : la requête a pu atteindre le serveur.
+        if (attempts === 1) throw new TypeError('Failed to fetch');
+        return { status: 201, body: appointment() };
+      },
+    });
+    renderApp('/agenda');
+    let form = await openNewForm();
+    fireEvent.click(within(form).getByRole('button', { name: 'Enregistrer le rendez-vous' }));
+    expect(await within(form).findByText(/Vérifiez votre connexion/)).toBeInTheDocument();
+    fireEvent.click(within(form).getByRole('button', { name: 'Enregistrer le rendez-vous' }));
+    await screen.findByText('Rendez-vous enregistré.');
+    form = await openNewForm();
+    fireEvent.click(within(form).getByRole('button', { name: 'Enregistrer le rendez-vous' }));
+    await waitFor(() => expect(posts(calls, '/api/appointments')).toHaveLength(3));
+    const keys = posts(calls, '/api/appointments').map(
+      (c) => (c.body as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).not.toBe(keys[0]);
   });
 
   it('dans le passé : raison affichée clairement, confirmation seulement sur clic', async () => {

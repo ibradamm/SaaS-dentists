@@ -1,6 +1,6 @@
 # Phase 10 — Tests complets et validation globale : rapport
 
-Date : 2026-09-28. Statut : **code, tests et documentation terminés** ; résultat de la CI GitHub consigné dans le résumé de fin de phase. En attente de validation avant la Phase 11.
+Date : 2026-09-28. Statut : **validée** par le porteur du projet le 2026-09-28. Le correctif d'idempotence des rendez-vous recommandé en section 2 est livré avec l'audit pré-production (`phase-11-audit-preproduction.md`).
 
 Méthode et règles de test : ADR 0012. Scénario de démonstration : [`docs/demo.md`](../demo.md).
 

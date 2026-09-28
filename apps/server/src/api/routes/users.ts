@@ -13,14 +13,22 @@ import { actorOf, requestMeta } from '../auth-plugin';
 const params = z.object({ id: z.uuid() });
 const access = { permission: 'user.manage' } as const;
 
-export function usersRoutes(app: FastifyInstance, deps: { users: UsersService }) {
+export function usersRoutes(
+  app: FastifyInstance,
+  deps: { users: UsersService; sensitiveRateLimit: { max: number; timeWindow: string } },
+) {
   const { users } = deps;
+  // Création de compte et réinitialisation : émettent un mot de passe temporaire. La création
+  // répond aussi si une adresse existe déjà sur la plateforme (e-mail unique) : même limite
+  // que la connexion, pour qu'un compte administrateur ne serve pas à tester des adresses en
+  // masse.
+  const rateLimit = deps.sensitiveRateLimit;
 
   app.get('/api/users', { config: { access } }, async (request) =>
     listUsersResponseSchema.parse({ users: await users.list(actorOf(request)) }),
   );
 
-  app.post('/api/users', { config: { access } }, async (request, reply) => {
+  app.post('/api/users', { config: { access, rateLimit } }, async (request, reply) => {
     const body = createUserRequestSchema.parse(request.body);
     const created = await users.create(actorOf(request), body, requestMeta(request));
     return reply.status(201).send(temporaryPasswordResponseSchema.parse(created));
@@ -34,7 +42,7 @@ export function usersRoutes(app: FastifyInstance, deps: { users: UsersService })
     );
   });
 
-  app.post('/api/users/:id/reset-password', { config: { access } }, async (request) => {
+  app.post('/api/users/:id/reset-password', { config: { access, rateLimit } }, async (request) => {
     const { id } = params.parse(request.params);
     return temporaryPasswordResponseSchema.parse(
       await users.resetPassword(actorOf(request), id, requestMeta(request)),

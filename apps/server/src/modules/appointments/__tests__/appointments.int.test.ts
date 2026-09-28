@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { actorFor } from '../../../../test/actors';
@@ -685,6 +685,166 @@ describe('rendez-vous', () => {
           META,
         ),
       ).rejects.toMatchObject({ code: 'PRACTITIONER_ABSENT' });
+    });
+  });
+
+  describe('idempotence de la création (réponse perdue, double envoi)', () => {
+    const request = (patientId: string, start: string, key: string) => ({
+      practitionerId: drA,
+      patientId,
+      appointmentTypeId: consultation,
+      start,
+      idempotencyKey: key,
+    });
+    const rowsWithKey = (key: string) =>
+      withTenant(t.appDb, clinic.id, (tx) =>
+        tx
+          .select({ id: appointments.id })
+          .from(appointments)
+          .where(and(eq(appointments.clinicId, clinic.id), eq(appointments.idempotencyKey, key))),
+      );
+
+    it('nouvel essai avec la même clé : même rendez-vous, aucune seconde ligne ni trace', async () => {
+      const key = randomUUID();
+      const patient = await newPatient();
+      const first = await service.createOrReplay(
+        secretary,
+        request(patient, '2026-10-19T09:00', key),
+        META,
+      );
+      const again = await service.createOrReplay(
+        secretary,
+        request(patient, '2026-10-19T09:00', key),
+        META,
+      );
+      expect(first.replayed).toBe(false);
+      expect(again).toEqual({ appointment: first.appointment, replayed: true });
+      expect(await rowsWithKey(key)).toHaveLength(1);
+      expect((await auditFor(first.appointment.id)).map((a) => a.action)).toEqual([
+        'appointment.created',
+      ]);
+    });
+
+    it('cinq envois simultanés de la même saisie : un seul rendez-vous, tous le reçoivent', async () => {
+      const key = randomUUID();
+      const patient = await newPatient();
+      const results = await Promise.all(
+        Array.from({ length: 5 }, () =>
+          service.createOrReplay(secretary, request(patient, '2026-10-19T10:00', key), META),
+        ),
+      );
+      expect(new Set(results.map((r) => r.appointment.id)).size).toBe(1);
+      expect(results.filter((r) => !r.replayed)).toHaveLength(1);
+      expect(await rowsWithKey(key)).toHaveLength(1);
+    });
+
+    it('même clé avec une autre demande : refus explicite, rien de créé', async () => {
+      const key = randomUUID();
+      const patient = await newPatient();
+      await service.createOrReplay(secretary, request(patient, '2026-10-19T11:00', key), META);
+      await expect(
+        service.createOrReplay(secretary, request(patient, '2026-10-19T14:00', key), META),
+      ).rejects.toMatchObject({ code: 'CONFLICT', statusCode: 409 });
+      // Autre praticien, même clé : la clé déjà prise est détectée à l'insertion.
+      await expect(
+        service.createOrReplay(
+          secretary,
+          { ...request(await newPatient(), '2026-10-19T14:00', key), practitionerId: drB },
+          META,
+        ),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(await rowsWithKey(key)).toHaveLength(1);
+    });
+
+    it('nouvelle demande légitime (nouvelle clé) : contrôlée normalement', async () => {
+      const patient = await newPatient();
+      await service.createOrReplay(
+        secretary,
+        request(patient, '2026-10-20T09:00', randomUUID()),
+        META,
+      );
+      // Même créneau, nouvelle clé : c'est une nouvelle demande, refusée car le créneau est pris.
+      await expect(
+        service.createOrReplay(
+          secretary,
+          request(await newPatient(), '2026-10-20T09:00', randomUUID()),
+          META,
+        ),
+      ).rejects.toMatchObject({ code: 'SLOT_UNAVAILABLE' });
+      // Autre créneau, nouvelle clé : créé.
+      const other = await service.createOrReplay(
+        secretary,
+        request(patient, '2026-10-20T10:00', randomUUID()),
+        META,
+      );
+      expect(other.replayed).toBe(false);
+    });
+
+    it('rendez-vous annulé puis même clé rejouée : le rendez-vous annulé est renvoyé, pas recréé', async () => {
+      const key = randomUUID();
+      const patient = await newPatient();
+      const { appointment } = await service.createOrReplay(
+        secretary,
+        request(patient, '2026-10-20T11:00', key),
+        META,
+      );
+      await service.changeStatus(
+        secretary,
+        appointment.id,
+        { version: appointment.version, status: 'CANCELLED' },
+        META,
+      );
+      const replay = await service.createOrReplay(
+        secretary,
+        request(patient, '2026-10-20T11:00', key),
+        META,
+      );
+      expect(replay).toMatchObject({
+        replayed: true,
+        appointment: { id: appointment.id, status: 'CANCELLED' },
+      });
+      expect(await rowsWithKey(key)).toHaveLength(1);
+    });
+
+    it('clé propre à chaque cabinet : la même clé dans un autre cabinet crée son rendez-vous', async () => {
+      const key = randomUUID();
+      const mine = await service.createOrReplay(
+        secretary,
+        request(await newPatient(), '2026-10-21T09:00', key),
+        META,
+      );
+      // Autre cabinet, même clé : aucune ligne visible (RLS), aucun refus qui révélerait la
+      // clé du premier cabinet ; son propre rendez-vous est créé.
+      const practitioner = await practitionersService.createPractitioner(
+        otherAdmin,
+        { displayName: 'Dr Ailleurs', color: '#0ea5e9' },
+        META,
+      );
+      const type = await practitionersService.createType(
+        otherAdmin,
+        { name: 'Consultation', durationMinutes: 30, color: '#0ea5e9' },
+        META,
+      );
+      const patient = await patientsService.create(
+        otherAdmin,
+        { lastName: 'Ailleurs', firstName: 'Nina', contacts: [] },
+        META,
+      );
+      const theirs = await service.createOrReplay(
+        otherAdmin,
+        {
+          practitionerId: practitioner.id,
+          patientId: patient.id,
+          appointmentTypeId: type.id,
+          start: '2026-10-21T09:00',
+          allowOutsideAvailability: true,
+          idempotencyKey: key,
+        },
+        META,
+      );
+      expect(theirs.replayed).toBe(false);
+      expect(theirs.appointment.id).not.toBe(mine.appointment.id);
+      expect(await rowsWithKey(key)).toEqual([{ id: mine.appointment.id }]);
     });
   });
 });

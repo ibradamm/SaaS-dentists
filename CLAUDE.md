@@ -9,6 +9,7 @@ Projet : plateforme de gestion de cabinet dentaire. Le plan validé est dans `do
 - PostgreSQL local sans Docker : `pnpm dev:db`, puis `pnpm db:bootstrap && pnpm db:migrate`
 - Parcours de bout en bout (build de production puis Playwright, ~5 min) : `pnpm e2e` ; un fichier : `pnpm build && pnpm --filter @dental/e2e exec playwright test tests/<fichier>`
 - Test réel de Sentry (staging uniquement, `SENTRY_DSN` en variable d'environnement) : `APP_ENV=staging pnpm --filter @dental/server sentry:check`
+- Vérification d'un déploiement hébergé (HTTPS, TLS, en-têtes, CORS, erreurs, cookies, limitation derrière le proxy) : `pnpm --filter @dental/e2e check:deployment --url https://… [--email … --rate-limit]`
 - Nouvelle migration :
   - après une modification de `apps/server/src/db/schema` : `pnpm --filter @dental/server db:generate` ;
   - SQL manuel (RLS, droits, triggers) : `pnpm --filter @dental/server exec drizzle-kit generate --custom --name=<nom>`.
@@ -32,5 +33,7 @@ Projet : plateforme de gestion de cabinet dentaire. Le plan validé est dans `do
 - Aucun secret dans le code ni dans Git. Aucune donnée sensible dans les logs.
 - Toute action asynchrone ou externe est enfilée dans la transaction métier via `enqueue` (outbox).
 - Une fonctionnalité visible par le personnel ajoute ou étend un parcours `e2e/tests/` ; toute donnée saisie par un parcours est déclarée dans `e2e/support/sentinels.ts` (contrôle final des journaux, de l'audit et de la file de tâches). Pas de relance automatique d'un test instable : on le corrige (ADR 0012).
+- Toute création rejouable par un nouvel essai porte une clé d'idempotence, gardée tant que l'issue est inconnue (`lib/idempotency.ts`) : encaissements (ADR 0009), rendez-vous (ADR 0007, section 11).
+- En-têtes de sécurité de l'interface : source unique `apps/web/security-headers.ts`, à reprendre à l'identique par le proxy ; aucune page ne doit déclencher de violation de CSP (pas de `unsafe-inline` ni `unsafe-eval`).
 - Toute date ou heure affichée passe par le fuseau du cabinet (`formatDateTime(iso, timeZone)`, `lib/dates.ts`) ; `timezone-guard.test.ts` refuse le reste.
 - Périmètre actuel : SaaS de gestion du cabinet uniquement. Aucune fonctionnalité WhatsApp, agent IA ou Google Calendar (extensions futures, `docs/future/`).

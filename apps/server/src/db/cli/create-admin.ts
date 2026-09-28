@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import { loadMigrateConfig } from '../../config/env';
 import { generateTemporaryPassword } from '../../modules/auth/password';
+import { SECURITY_POLICY } from '../../modules/auth/security-policy';
 import { provisionUser } from '../admin/users';
 import { createDb, createPool } from '../client';
 
@@ -28,6 +29,9 @@ try {
   });
   console.log(`Administrateur créé : ${id}`);
   console.log(`Mot de passe temporaire (affiché une seule fois) : ${temporaryPassword}`);
+  console.log(
+    `Valable ${SECURITY_POLICY.temporaryPasswordHours} heures : à changer à la première connexion.`,
+  );
 } finally {
   await pool.end();
 }

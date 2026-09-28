@@ -1,5 +1,12 @@
+import { randomBytes } from 'node:crypto';
 import { defineConfig, devices } from '@playwright/test';
 import { BASE_URL } from './support/env';
+
+// Clé de chiffrement propre à l'exécution, connue du lanceur : la pile la reçoit par
+// l'environnement, le contrôle final vérifie qu'elle n'apparaît dans aucun journal, et le test
+// de restauration s'en sert pour relire les notes médicales d'une base restaurée. Les
+// processus des tests héritent de la même valeur (évaluée une fois par le lanceur).
+process.env.E2E_DATA_ENCRYPTION_KEY ??= randomBytes(32).toString('base64');
 
 /**
  * Tests de bout en bout du produit (docs/phases/phase-10.md), sur la pile de production

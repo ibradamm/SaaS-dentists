@@ -195,11 +195,14 @@ describe('conservation des données : tâche quotidienne', () => {
       const user = (await createUser(t.ownerDb, clinic.id, 'SECRETARY')).id;
       const old = await session(clinic.id, user, { seen: ago(45 * DAY) });
       const jobId = await boss.send(RETENTION_QUEUE, {});
-      for (let i = 0; i < 50 && (await exists(clinic.id, 'sessions', old)); i++) {
+      // La tâche parcourt tous les cabinets de la base de test (partagée avec les autres
+      // fichiers) : on attend sa fin, pas seulement la suppression dans ce cabinet-ci.
+      const state = async () => (await boss.getJobById(RETENTION_QUEUE, jobId!))?.state;
+      for (let i = 0; i < 150 && !['completed', 'failed'].includes((await state()) ?? ''); i++) {
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
+      expect(await state()).toBe('completed');
       expect(await exists(clinic.id, 'sessions', old)).toBe(false);
-      expect((await boss.getJobById(RETENTION_QUEUE, jobId!))?.state).toBe('completed');
     } finally {
       await boss.stop({ graceful: false });
     }

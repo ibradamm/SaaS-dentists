@@ -71,6 +71,8 @@ pnpm e2e                  # build de production, puis les 52 parcours (environ 5
 pnpm --filter @dental/e2e exec playwright show-report artifacts/report
 ```
 
+Vérification d'un environnement hébergé (staging, puis production), par de vraies requêtes HTTP : `pnpm --filter @dental/e2e check:deployment --url https://… [--email compte-de-test --rate-limit]` (mot de passe dans `CHECK_PASSWORD`). Audit pré-production et état de chaque contrôle : `docs/phases/phase-11-audit-preproduction.md`.
+
 - La pile est démarrée par Playwright :
   - base `dental_e2e` recréée ;
   - migrations, API, worker et interface compilés ;

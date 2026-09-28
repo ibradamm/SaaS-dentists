@@ -4,6 +4,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   api,
   createPatient,
+  cspViolations,
   DESKTOP,
   horizontalOverflow,
   PHONE,
@@ -75,6 +76,8 @@ async function open(page: Page, route: string) {
   await page.goto(route === 'PATIENT' ? `/patients/${patientId}` : route);
   await expect(page.locator('main h1').first()).toBeVisible();
   await page.waitForLoadState('networkidle');
+  // CSP de production appliquée : aucune ressource ni aucun style bloqué sur la page.
+  expect({ route, csp: await cspViolations(page) }).toEqual({ route, csp: [] });
 }
 
 for (const role of ['SECRETARY', 'DENTIST', 'ADMIN'] as const) {

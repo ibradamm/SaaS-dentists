@@ -26,7 +26,7 @@ import {
 } from '../../db/schema';
 import { withTenant } from '../../db/tenant';
 import { AppError } from '../../lib/errors';
-import { PG_EXCLUSION_VIOLATION, pgErrorCode } from '../../lib/pg-errors';
+import { PG_EXCLUSION_VIOLATION, PG_UNIQUE_VIOLATION, pgErrorCode } from '../../lib/pg-errors';
 import { recordAudit } from '../audit/audit.service';
 import type { RequestMeta, UserActor } from '../auth/auth.types';
 import { authorize } from '../auth/authorize';
@@ -59,6 +59,12 @@ const staleVersion = () =>
   );
 const slotUnavailable = (message = 'Ce créneau est déjà pris') =>
   new AppError('SLOT_UNAVAILABLE', message, 409);
+const replayConflict = () =>
+  new AppError(
+    'CONFLICT',
+    'Cette saisie a déjà été enregistrée avec d’autres valeurs. Rechargez l’agenda.',
+    409,
+  );
 
 const STATUS_LABELS: Record<AppointmentStatus, string> = {
   SCHEDULED: 'prévu',
@@ -269,6 +275,16 @@ export function createAppointmentsService(deps: { db: Database; now?: () => Date
     throw error;
   }
 
+  /**
+   * Création : la même saisie envoyée deux fois au même instant est sérialisée par le verrou
+   * du praticien. Une clé déjà prise à l'insertion vient donc d'une demande différente
+   * (autre praticien) portant la même clé : refus explicite.
+   */
+  function insertError(error: unknown): never {
+    if (pgErrorCode(error) === PG_UNIQUE_VIOLATION) throw replayConflict();
+    return exclusionError(error);
+  }
+
   async function auditOverride(
     tx: Transaction,
     actor: UserActor,
@@ -366,11 +382,16 @@ export function createAppointmentsService(deps: { db: Database; now?: () => Date
 
   // --- Écriture ----------------------------------------------------------------------------
 
-  async function create(
+  /**
+   * Création. Avec une clé d'idempotence déjà enregistrée dans le cabinet : le rendez-vous de
+   * cette saisie est renvoyé tel quel (`replayed`), sans nouveau contrôle de créneau ni nouvelle
+   * trace, à condition que la demande soit la même ; sinon refus explicite.
+   */
+  async function createOrReplay(
     actor: UserActor,
     input: CreateAppointmentRequest,
     meta: RequestMeta,
-  ): Promise<Appointment> {
+  ): Promise<{ appointment: Appointment; replayed: boolean }> {
     authorize(actor, 'appointment.write');
     const data = createAppointmentRequestSchema.parse(input);
     return withTenant(db, actor.clinicId, async (tx) => {
@@ -380,7 +401,31 @@ export function createAppointmentsService(deps: { db: Database; now?: () => Date
       const zone = await clinicZone(tx, actor.clinicId);
       const start = startInstant(data.start, zone);
       const end = start + (data.durationMinutes ?? type.durationMinutes) * MINUTE;
+      // Verrou du praticien avant la recherche par clé : deux envois simultanés de la même
+      // saisie (même praticien) passent l'un après l'autre, le second retrouve le premier.
       await lockPractitioners(tx, [data.practitionerId]);
+      if (data.idempotencyKey) {
+        const [previous] = await tx
+          .select()
+          .from(appointments)
+          .where(
+            and(
+              eq(appointments.clinicId, actor.clinicId),
+              eq(appointments.idempotencyKey, data.idempotencyKey),
+            ),
+          );
+        if (previous) {
+          const same =
+            previous.practitionerId === data.practitionerId &&
+            previous.patientId === data.patientId &&
+            previous.appointmentTypeId === data.appointmentTypeId &&
+            previous.startAt.getTime() === start &&
+            previous.endAt.getTime() === end &&
+            (previous.note ?? null) === (data.note || null);
+          if (!same) throw replayConflict();
+          return { appointment: await readOne(tx, actor.clinicId, previous.id), replayed: true };
+        }
+      }
       const placement = await checkPlacement(tx, actor.clinicId, {
         practitionerId: data.practitionerId,
         patientId: data.patientId,
@@ -401,9 +446,10 @@ export function createAppointmentsService(deps: { db: Database; now?: () => Date
           endAt: new Date(end),
           note: data.note || null,
           createdBy: actor.userId,
+          idempotencyKey: data.idempotencyKey ?? null,
         })
         .returning({ id: appointments.id })
-        .catch(exclusionError);
+        .catch(insertError);
       const id = row!.id;
       await audit(tx, actor, 'appointment.created', id, meta, {
         practitionerId: { to: data.practitionerId },
@@ -413,8 +459,16 @@ export function createAppointmentsService(deps: { db: Database; now?: () => Date
         endAt: { to: new Date(end).toISOString() },
       });
       await auditOverride(tx, actor, id, meta, { reasons: placement.reasons, start, end });
-      return readOne(tx, actor.clinicId, id);
+      return { appointment: await readOne(tx, actor.clinicId, id), replayed: false };
     });
+  }
+
+  async function create(
+    actor: UserActor,
+    input: CreateAppointmentRequest,
+    meta: RequestMeta,
+  ): Promise<Appointment> {
+    return (await createOrReplay(actor, input, meta)).appointment;
   }
 
   /** Déplacement, changement de praticien, de type, de durée ou de note (rendez-vous prévu). */
@@ -591,5 +645,5 @@ export function createAppointmentsService(deps: { db: Database; now?: () => Date
     });
   }
 
-  return { list, get, forPatient, slots, create, update, changeStatus };
+  return { list, get, forPatient, slots, create, createOrReplay, update, changeStatus };
 }

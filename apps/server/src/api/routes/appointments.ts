@@ -38,8 +38,13 @@ export function appointmentsRoutes(
 
   app.post('/api/appointments', { config: write }, async (request, reply) => {
     const body = createAppointmentRequestSchema.parse(request.body);
-    const created = await appointments.create(actorOf(request), body, requestMeta(request));
-    return reply.status(201).send(appointmentSchema.parse(created));
+    const { appointment, replayed } = await appointments.createOrReplay(
+      actorOf(request),
+      body,
+      requestMeta(request),
+    );
+    // Saisie rejouée (même clé d'idempotence) : 200 avec le rendez-vous déjà créé.
+    return reply.status(replayed ? 200 : 201).send(appointmentSchema.parse(appointment));
   });
 
   app.patch('/api/appointments/:id', { config: write }, async (request) => {

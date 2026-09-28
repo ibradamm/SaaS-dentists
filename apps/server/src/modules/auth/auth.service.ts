@@ -167,6 +167,13 @@ export function createAuthService(deps: AuthServiceDeps) {
       if (!passwordOk || user.status !== 'ACTIVE') {
         return { kind: 'failed' as const, user, lockedNow: await countFailure(tx, user.id) };
       }
+      // Mot de passe temporaire correct mais expiré : refus explicite (le mot de passe était
+      // juste, ce n'est pas un essai à compter), sans remise à zéro du compteur.
+      const temporaryUntil =
+        user.passwordChangedAt.getTime() + P.temporaryPasswordHours * 3_600_000;
+      if (user.mustChangePassword && now().getTime() >= temporaryUntil) {
+        return { kind: 'expired' as const, user };
+      }
       // Sans second facteur, la connexion est complète : le compteur repart à zéro. Avec un
       // second facteur, il ne repart à zéro qu'après le bon code ; sinon, connaître le mot de
       // passe suffirait à effacer les codes faux et à en essayer sans limite.
@@ -183,6 +190,18 @@ export function createAuthService(deps: AuthServiceDeps) {
       throw invalidCredentials();
     }
     if (attempt.kind === 'locked') throw accountLocked();
+    if (attempt.kind === 'expired') {
+      await auditInUserClinics(attempt.user.id, 'auth.login_failed', meta);
+      logger.warn(
+        { userId: attempt.user.id, requestId: meta.requestId },
+        'connexion refusée : mot de passe temporaire expiré',
+      );
+      throw new AppError(
+        'TEMPORARY_PASSWORD_EXPIRED',
+        "Ce mot de passe temporaire a expiré. Demandez-en un nouveau à l'administrateur du cabinet.",
+        401,
+      );
+    }
     if (attempt.kind === 'failed') {
       await auditInUserClinics(attempt.user.id, 'auth.login_failed', meta);
       if (attempt.lockedNow) await auditInUserClinics(attempt.user.id, 'auth.account_locked', meta);

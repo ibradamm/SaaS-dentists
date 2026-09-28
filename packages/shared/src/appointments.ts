@@ -116,6 +116,12 @@ export const createAppointmentRequestSchema = z.object({
   note: noteSchema.default(null),
   /** Confirmation explicite d'un rendez-vous hors horaires ou sur un créneau bloqué. */
   allowOutsideAvailability: z.boolean().default(false),
+  /**
+   * Clé de la saisie (UUID tiré par l'interface, gardé pour chaque nouvel essai tant que l'issue
+   * est inconnue) : un nouvel essai après une réponse perdue renvoie le rendez-vous déjà créé
+   * au lieu d'un refus « créneau pris ». Facultative pour un appelant qui n'en a pas besoin.
+   */
+  idempotencyKey: z.uuid().optional(),
 });
 export type CreateAppointmentRequest = z.input<typeof createAppointmentRequestSchema>;
 

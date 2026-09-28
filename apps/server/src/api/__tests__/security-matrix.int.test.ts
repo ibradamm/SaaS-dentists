@@ -157,6 +157,71 @@ describe('sécurité HTTP : matrice de toutes les routes', () => {
     expect(failures).toEqual([]);
   });
 
+  it('entrées hostiles sur toutes les routes : jamais d’erreur 500, aucun détail technique renvoyé', async () => {
+    // Identifiants malformés, injections, chemins, corps de mauvais type, pollution de
+    // prototype, chaînes de requête incohérentes : refus propre (4xx) partout.
+    const PARAMS = [
+      'pas-un-uuid',
+      "1' OR '1'='1",
+      '..%2F..%2Fetc%2Fpasswd',
+      '%00',
+      'a'.repeat(300),
+    ];
+    const BODIES: unknown[] = [
+      [],
+      { __proto__: { pollue: true }, constructor: { prototype: { pollue: true } } },
+      JSON.parse('{"__proto__": {"pollue": true}}'),
+      {
+        id: {},
+        email: ['x'],
+        amountCents: '1e309',
+        start: '2026-02-30T25:61',
+        version: -1,
+        content: 'x'.repeat(100_000),
+      },
+    ];
+    const QUERY =
+      '?from=2026-02-30&to=pas-une-date&limit=-5&offset=1e309&q=%27%3B--&practitionerId=x&status=ZZZ&includeCancelled=peut-etre';
+    const leaks = /select |insert |update |\bat \w+ \(|node_modules|\/home\/|stack|Error:/i;
+    const failures: string[] = [];
+    for (const role of ['ADMIN', 'DENTIST'] as const) {
+      const b = await signedIn(role);
+      for (const r of routes) {
+        if (r.url.startsWith('/api/auth/') || r.access.public || r.method === 'HEAD') continue;
+        const required = r.access.permission ? [r.access.permission] : r.access.anyPermission;
+        if (required && !required.some((p) => roleHasPermission(role, p))) continue;
+        const attempts: { url: string; body?: unknown }[] = [];
+        const hasParams = /:[A-Za-z]+/.test(r.url);
+        for (const value of hasParams ? PARAMS : []) {
+          attempts.push({ url: r.url.replace(/:[A-Za-z]+/g, value) });
+        }
+        if (r.method === 'GET') attempts.push({ url: `${concrete(r.url)}${QUERY}` });
+        if (UNSAFE.has(r.method)) {
+          for (const body of BODIES) attempts.push({ url: concrete(r.url), body });
+        }
+        for (const attempt of attempts) {
+          const m = r.method as Method;
+          const res =
+            m === 'GET'
+              ? await b.get(attempt.url)
+              : m === 'DELETE'
+                ? await b.delete(attempt.url)
+                : m === 'POST'
+                  ? await b.post(attempt.url, attempt.body ?? {})
+                  : m === 'PATCH'
+                    ? await b.patch(attempt.url, attempt.body ?? {})
+                    : await b.put(attempt.url, attempt.body ?? {});
+          const where = `${role} ${label(r)} ${attempt.url.slice(0, 60)}`;
+          if (res.statusCode >= 500) failures.push(`${where} → ${res.statusCode}`);
+          if (res.statusCode >= 400 && leaks.test(res.body))
+            failures.push(`${where} : détail renvoyé`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+    expect((Object.prototype as Record<string, unknown>).pollue).toBeUndefined();
+  });
+
   it('étape d’authentification en cours : seules les routes de cette étape répondent', async () => {
     const user = await createUser(t.ownerDb, clinic.id, 'SECRETARY', { mustChangePassword: true });
     const b = browser(app);

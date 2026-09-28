@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   expect,
   type Browser,
+  type BrowserContext,
   type BrowserContextOptions,
   type Locator,
   type Page,
@@ -135,6 +136,26 @@ export async function login(page: Page, account: Account, options: { clinic?: st
   await expect(page.getByRole('heading', { name: /Bonjour/ })).toBeVisible();
 }
 
+/**
+ * Enregistre dans la page toute violation de la politique de sécurité du contenu (CSP) : une
+ * ressource bloquée peut passer inaperçue (style, image), la liste doit rester vide.
+ */
+export async function watchCsp(context: BrowserContext) {
+  await context.addInitScript(() => {
+    const w = window as unknown as { __csp?: string[] };
+    w.__csp = [];
+    document.addEventListener('securitypolicyviolation', (e) => {
+      w.__csp?.push(
+        `${e.effectiveDirective} ${e.blockedURI || 'inline'} (${e.sourceFile}:${e.lineNumber})`,
+      );
+    });
+  });
+}
+
+export function cspViolations(page: Page): Promise<string[]> {
+  return page.evaluate(() => (window as unknown as { __csp?: string[] }).__csp ?? []);
+}
+
 /** Nouveau poste (contexte isolé) connecté avec ce compte. */
 export async function signIn(
   browser: Browser,
@@ -143,6 +164,7 @@ export async function signIn(
 ): Promise<Page> {
   const { clinic, ...contextOptions } = options;
   const context = await browser.newContext(contextOptions);
+  await watchCsp(context);
   const page = await context.newPage();
   // Les confirmations (window.confirm) sont acceptées, comme par un utilisateur.
   page.on('dialog', (dialog) => void dialog.accept());
