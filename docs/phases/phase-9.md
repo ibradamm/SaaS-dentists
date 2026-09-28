@@ -1,6 +1,6 @@
 # Phase 9 — Journal d'audit consultable et revue de sécurité : rapport
 
-Date : 2026-09-27. Statut : **code et tests locaux terminés** ; résultat de la CI GitHub consigné dans le résumé de fin de phase. En attente de validation avant la Phase 10.
+Date : 2026-09-27. Statut : **validée** par le porteur du projet le 2026-09-28 (conservation des sessions terminées : 30 jours au MVP, configurable ; test réel de Sentry reporté à la Phase 11, voir `phase-10.md`).
 
 L'analyse, les constats et les décisions sont dans l'ADR 0011. Ce rapport dit ce qui a été livré, vérifié et comment.
 

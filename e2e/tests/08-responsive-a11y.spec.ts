@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   api,
   createPatient,
@@ -13,7 +13,7 @@ import {
   type Clinic,
   type Role,
 } from '../support/app';
-import { todayIn } from '../support/dates';
+import { nextWorkday, todayIn } from '../support/dates';
 import { PATIENTS } from '../support/sentinels';
 
 /*
@@ -160,6 +160,55 @@ test('panneaux et formulaires ouverts (agenda, encaissement) : aucune violation 
   }
   await page.setViewportSize(DESKTOP);
   expect(found).toEqual([]);
+});
+
+/** Tabulations jusqu'à l'élément voulu : il doit être atteignable au clavier. */
+async function tabTo(page: Page, target: Locator, max = 80) {
+  for (let i = 0; i < max; i += 1) {
+    if (await target.evaluate((el) => el === document.activeElement).catch(() => false)) return;
+    await page.keyboard.press('Tab');
+  }
+  throw new Error(`Élément non atteint au clavier après ${max} tabulations`);
+}
+
+test('clavier seul : connexion, lien d’évitement, prise de rendez-vous', async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: DESKTOP })).newPage();
+  const account = clinic.secretary;
+  await page.goto('/connexion');
+  await tabTo(page, page.getByLabel('Adresse e-mail'));
+  await page.keyboard.type(account.email);
+  await page.keyboard.press('Tab');
+  await page.keyboard.type(account.password);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: /Bonjour/ })).toBeVisible();
+
+  const day = nextWorkday(todayIn());
+  await page.goto(`/agenda?vue=jour&date=${day}`);
+  await expect(page.locator('main h1').first()).toBeVisible();
+  // Première tabulation : le lien d'évitement, qui mène au contenu.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Aller au contenu' })).toBeFocused();
+  await tabTo(page, page.getByRole('button', { name: 'Nouveau rendez-vous' }));
+  await page.keyboard.press('Enter');
+  const panel = page.getByRole('complementary', { name: 'Nouveau rendez-vous' });
+  await expect(panel.getByRole('heading', { name: 'Nouveau rendez-vous' })).toBeFocused();
+  await tabTo(page, panel.getByLabel('Patient', { exact: true }));
+  await page.keyboard.type(PATIENTS.a[0]);
+  const found = panel.getByRole('list', { name: 'Patients trouvés' }).getByRole('button').first();
+  await expect(found).toBeVisible();
+  await tabTo(page, found);
+  await page.keyboard.press('Enter');
+  const slot = panel.getByRole('list', { name: 'Créneaux libres ce jour' }).getByRole('button', {
+    name: '11:00',
+  });
+  await tabTo(page, slot);
+  await page.keyboard.press('Enter');
+  await expect(slot).toHaveAttribute('aria-pressed', 'true');
+  await tabTo(page, panel.getByRole('button', { name: 'Enregistrer le rendez-vous' }));
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Rendez-vous enregistré.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /11:00–11:30 AUBERTIN Léonie/ })).toBeVisible();
+  await page.context().close();
 });
 
 test('page de connexion : lisible sur téléphone et sans violation grave', async ({ browser }) => {

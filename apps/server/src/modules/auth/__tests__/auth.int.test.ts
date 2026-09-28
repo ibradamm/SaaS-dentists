@@ -9,7 +9,7 @@ import {
   uniqueEmail,
 } from '../../../../test/auth';
 import { createTestClinic, openTestDatabase } from '../../../../test/db';
-import { auditLogs, clinicMemberships, users, type Clinic } from '../../../db/schema';
+import { auditLogs, clinicMemberships, clinics, users, type Clinic } from '../../../db/schema';
 import { withTenant } from '../../../db/tenant';
 import { SECURITY_POLICY } from '../security-policy';
 
@@ -118,9 +118,16 @@ describe('authentification (services, base réelle, rôle applicatif)', () => {
       const first = await createTestClinic(t.ownerDb, { name: 'Cabinet des Tilleuls' });
       const second = await createTestClinic(t.ownerDb, { name: 'Cabinet Albert' });
       const outsider = await createTestClinic(t.ownerDb, { name: 'Cabinet étranger' });
+      const suspended = await createTestClinic(t.ownerDb, { name: 'Cabinet Suspendu' });
       const user = await createUser(t.ownerDb, first.id, 'SECRETARY');
-      await withTenant(t.ownerDb, second.id, (tx) =>
-        tx.insert(clinicMemberships).values({ userId: user.id, role: 'SECRETARY' }),
+      for (const other of [second, suspended]) {
+        await withTenant(t.ownerDb, other.id, (tx) =>
+          tx.insert(clinicMemberships).values({ userId: user.id, role: 'SECRETARY' }),
+        );
+      }
+      // Cabinet suspendu : jamais proposé.
+      await withTenant(t.ownerDb, suspended.id, (tx) =>
+        tx.update(clinics).set({ status: 'SUSPENDED' }).where(eq(clinics.id, suspended.id)),
       );
       const credentials = { email: user.email, password: user.password };
       await expect(auth.login(credentials, META)).rejects.toMatchObject({

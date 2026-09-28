@@ -106,7 +106,7 @@ Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, 
 
 ### A.6 Environnements
 - `APP_ENV` ∈ `development`, `test`, `staging`, `production` ; configuration validée au démarrage.
-- **Tests :** base jetable à chaque exécution.
+- **Tests :** base jetable à chaque exécution ; parcours de bout en bout sur une base `dental_e2e` recréée, avec les migrations, l'API, le worker et l'interface compilés (ADR 0012).
 - **Staging :** jamais de données patients réelles.
 
 ---
@@ -127,7 +127,7 @@ Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, 
 | Agenda | Grille maison (React, `Intl`), sans bibliothèque de calendrier | FullCalendar écarté : fuseau nommé du cabinet seulement avec un greffon Luxon (> 200 ko) ; pas de glisser-déposer au MVP (ADR 0007, section 7) |
 | Dates et fuseaux | Luxon (serveur) ; `Intl` dans l'interface pour l'affichage dans le fuseau du cabinet | Fuseaux IANA, changements d'heure (ADR 0006) |
 | Graphiques | Écrits à la main (HTML et CSS) | Colonnes, barres et jauges simples : une bibliothèque ajouterait plusieurs dizaines de ko (ADR 0010) |
-| Tests | Vitest, Testing Library, Playwright (E2E en Phase 10) | |
+| Tests | Vitest, Testing Library, Playwright 1.56 (Chromium) et axe-core : parcours de bout en bout sur la pile de production (ADR 0012) | |
 | Qualité | ESLint (règles de frontières), Prettier, gitleaks, `pnpm audit` en CI, budget du chargement initial de l'interface (`pnpm check:bundle`) | |
 | Déploiement (Phase 11) | Conteneurs, Caddy (TLS automatique), PostgreSQL managé avec restauration à un instant donné | |
 
@@ -266,8 +266,8 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | 6 | Applications web dentiste et secrétaire : parcours quotidiens par rôle, ergonomie, accessibilité, téléphone et tablette (ADR 0008) | 12, 13 | Fait |
 | 7 | Paiements et revenus encaissés : actes à encaisser, paiements partiels, restant dû, annulations motivées, « À encaisser », revenus par période (ADR 0009) | 14 | Fait |
 | 8 | Tableau de bord et statistiques : indicateurs du jour sur l'accueil, page « Statistiques » par période et praticien, calculs en base dans le fuseau du cabinet (ADR 0010) | 15, 16 | Fait |
-| 9 | Journal d'audit consultable et revue de sécurité : page « Journal », matrice de toutes les routes, fuite entre cabinets, tentatives simultanées, journaux sans donnée patient, remontée des erreurs, conservation (ADR 0011) | 17, 18 | Fait (en attente de validation) |
-| 10 | Tests complets : E2E Playwright en CI, charge, restauration | 19 | À faire |
+| 9 | Journal d'audit consultable et revue de sécurité : page « Journal », matrice de toutes les routes, fuite entre cabinets, tentatives simultanées, journaux sans donnée patient, remontée des erreurs, conservation (ADR 0011) | 17, 18 | Fait |
+| 10 | Tests complets et validation globale : parcours de bout en bout sur la pile de production en CI (trois rôles, concurrence, réseau, changement d'heure, isolation, accessibilité, responsive), charge, restauration, démonstration (ADR 0012, `docs/demo.md`) | 19 | Fait (en attente de validation) |
 | 11 | Déploiement : hébergement, secrets, sauvegardes, supervision, procédures | 20 | À faire |
 
 ---
@@ -285,11 +285,12 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 
 | Risque | Parade |
 |---|---|
-| Double réservation (deux secrétaires en même temps) | Contraintes d'exclusion et verrou par praticien ; tests de concurrence (service, HTTP) et tests par mutation (Phase 5) |
+| Double réservation (deux secrétaires en même temps) | Contraintes d'exclusion et verrou par praticien ; tests de concurrence (service, HTTP, deux navigateurs) et tests par mutation (Phases 5 et 10) |
 | Double encaissement ou encaissement supérieur au dû (double clic, réseau, deux postes) | Clé d'idempotence par saisie ; verrou du montant dû et contrôle de la somme en base ; tests de concurrence (base, service, HTTP, navigateur) et tests par mutation (Phase 7) |
-| Erreurs de fuseau ou de changement d'heure | UTC en base, Luxon, tests sur les dates de changement d'heure |
+| Double envoi d'un formulaire (double clic, bouton qui rebondit) | Bouton désactivé pendant l'envoi ; requêtes identiques en cours regroupées par le client API ; clés d'idempotence des encaissements ; parcours de bout en bout (Phase 10) |
+| Erreurs de fuseau ou de changement d'heure | UTC en base, Luxon, tests sur les dates de changement d'heure ; parcours avec un poste réglé sur un autre fuseau que le cabinet ; test de garde contre tout affichage sans fuseau (Phase 10) |
 | Import de mauvaise qualité (colonnes mal associées) | Aperçu avant validation, rapport ligne par ligne, annulation d'un import non modifié |
-| Perte de données | Restauration à un instant donné, sauvegardes hors site, tests de restauration |
+| Perte de données | Restauration à un instant donné, sauvegardes hors site, tests de restauration (sauvegarde et restauration vérifiées en CI, Phase 10 ; exercice sur l'hébergement réel en Phase 11) |
 | Perte de la clé de chiffrement | Clé sauvegardée dans le gestionnaire de secrets ; sans elle, notes médicales et secrets TOTP sont illisibles |
 | Non-conformité données de santé | Minimisation, hébergement adapté, avis juridique avant la production |
 | Dérive du périmètre | Périmètre explicite (section 0, ADR 0004) |

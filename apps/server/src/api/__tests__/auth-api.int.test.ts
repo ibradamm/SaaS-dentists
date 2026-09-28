@@ -5,7 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TEST_WEB_ORIGIN, browser, buildTestApp } from '../../../test/app';
 import { createUser, enableMfa, testClock, totpAt, uniqueEmail } from '../../../test/auth';
 import { createTestClinic, openTestDatabase } from '../../../test/db';
-import type { Clinic } from '../../db/schema';
+import { clinicMemberships, type Clinic } from '../../db/schema';
+import { withTenant } from '../../db/tenant';
 import { createSecretBox } from '../../lib/secret-box';
 
 describe('API d’authentification', () => {
@@ -50,6 +51,28 @@ describe('API d’authentification', () => {
     expect(me.permissions).not.toContain('finance.reports.read');
     expect((await b.post('/api/auth/logout')).statusCode).toBe(204);
     expect((await b.get('/api/auth/me')).statusCode).toBe(401);
+  });
+
+  it('compte de plusieurs cabinets : 409 avec la liste des cabinets, sans session', async () => {
+    const other = await createTestClinic(t.ownerDb, { name: 'Cabinet Bis' });
+    const user = await createUser(t.ownerDb, clinic.id, 'SECRETARY');
+    await withTenant(t.ownerDb, other.id, (tx) =>
+      tx.insert(clinicMemberships).values({ userId: user.id, role: 'SECRETARY' }),
+    );
+    const res = await browser(app).login(user.email, user.password);
+    expect(res.statusCode).toBe(409);
+    const body = res.json<{ error: { code: string; clinics: { id: string; name: string }[] } }>();
+    expect(body.error.code).toBe('CLINIC_SELECTION_REQUIRED');
+    expect(body.error.clinics).toHaveLength(2);
+    expect(body.error.clinics).toContainEqual({ id: other.id, name: 'Cabinet Bis' });
+    expect(body.error.clinics).toContainEqual({ id: clinic.id, name: clinic.name });
+    expect(res.cookies.find((c) => c.name === 'dental_session')).toBeUndefined();
+    const chosen = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: user.email, password: user.password, clinicId: other.id },
+    });
+    expect(chosen.statusCode).toBe(200);
   });
 
   it('le cookie de session est httpOnly, SameSite=Lax, Path=/', async () => {

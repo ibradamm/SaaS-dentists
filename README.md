@@ -64,6 +64,22 @@ pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && p
 - Ils ont besoin de `TEST_DATABASE_ADMIN_URL`, `DATABASE_OWNER_PASSWORD` et `DATABASE_APP_PASSWORD`, lus depuis `.env`.
 - Attention : les rôles PostgreSQL sont communs à tout le cluster. Le bootstrap (y compris celui des tests) réaffirme leurs mots de passe. Lancer les tests avec d'autres mots de passe que ceux du `.env` modifie donc aussi ceux de la base de développement du même cluster.
 
+## Parcours de bout en bout (Playwright)
+
+```bash
+pnpm e2e                  # build de production, puis les 52 parcours (environ 5 minutes)
+pnpm --filter @dental/e2e exec playwright show-report artifacts/report
+```
+
+- La pile est démarrée par Playwright :
+  - base `dental_e2e` recréée ;
+  - migrations, API, worker et interface compilés ;
+  - cabinets créés par les commandes d'administration.
+- Prérequis :
+  - le `.env` de `pnpm setup:env` (`TEST_DATABASE_ADMIN_URL`, mots de passe des rôles) ;
+  - Chromium de la version figée de Playwright (`pnpm --filter @dental/e2e exec playwright install chromium`, sauf s'il est déjà fourni par l'environnement).
+- Ce qui est couvert (rôles, concurrence, réseau, changement d'heure, accessibilité, charge, restauration) et les chiffres mesurés : `docs/phases/phase-10.md` ; démonstration pas à pas : `docs/demo.md` ; règles : ADR 0012.
+
 ## Structure
 
 ```
@@ -72,7 +88,8 @@ apps/web        interface (React + Vite + Tailwind)
 packages/shared contrats Zod partagés entre API et interface
 infra/          docker-compose de développement
 scripts/        outils de développement (PostgreSQL local)
-docs/           architecture, décisions (ADR), rapports de phase
+e2e/            parcours de bout en bout (Playwright), charge, restauration
+docs/           architecture, décisions (ADR), rapports de phase, démonstration
 ```
 
 ## Règles
