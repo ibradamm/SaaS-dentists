@@ -42,3 +42,18 @@ export function frDate(date: string): string {
   const [y, m, d] = date.split('-');
   return `${d}/${m}/${y}`;
 }
+
+/** Dernier dimanche d'un mois (1 = janvier) : jour des changements d'heure européens. */
+export function lastSunday(year: number, month: number): string {
+  const last = new Date(Date.UTC(year, month, 0));
+  last.setUTCDate(last.getUTCDate() - last.getUTCDay());
+  return last.toISOString().slice(0, 10);
+}
+
+/** Prochain changement d'heure européen (mars : passage à l'été, octobre : à l'hiver). */
+export function nextDstChange(month: 3 | 10, after: string): string {
+  for (let year = Number(after.slice(0, 4)); ; year += 1) {
+    const day = lastSunday(year, month);
+    if (day > after) return day;
+  }
+}

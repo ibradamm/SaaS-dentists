@@ -94,7 +94,28 @@ export function setCsrfToken(token: string | null) {
 
 const SAFE = new Set(['GET', 'HEAD']);
 
-async function request<T>(
+// Requêtes identiques en cours (même méthode, même adresse, même corps) : une seule part, les
+// appels suivants reçoivent sa réponse. Un double envoi à quelques millisecondes d'intervalle
+// (rebond d'un bouton de souris, double clic plus rapide que le rendu qui désactive le bouton)
+// ne crée ainsi qu'un enregistrement. Deux actions différentes ont toujours un corps ou une
+// adresse différents ; une fois la réponse reçue, un nouvel envoi repart normalement.
+const inFlight = new Map<string, Promise<unknown>>();
+
+function request<T>(
+  method: string,
+  path: string,
+  schema: z.ZodType<T>,
+  body?: unknown,
+): Promise<T> {
+  const key = `${method} ${path} ${body === undefined ? '' : JSON.stringify(body)}`;
+  const pending = inFlight.get(key) as Promise<T> | undefined;
+  if (pending) return pending;
+  const promise = send(method, path, schema, body).finally(() => inFlight.delete(key));
+  inFlight.set(key, promise);
+  return promise;
+}
+
+async function send<T>(
   method: string,
   path: string,
   schema: z.ZodType<T>,

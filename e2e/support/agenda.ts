@@ -1,11 +1,16 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { selectContaining } from './app';
 
-/** Prise de rendez-vous par l'interface (panneau « Nouveau rendez-vous » de l'agenda). */
-export async function book(
-  page: Page,
-  options: { patient: string; practitioner: string; date: string; time: string; type?: string },
-) {
+export interface Booking {
+  patient: string;
+  practitioner: string;
+  date: string;
+  time: string;
+  type?: string;
+}
+
+/** Remplit le panneau « Nouveau rendez-vous » de l'agenda, sans l'envoyer. */
+export async function fillAppointment(page: Page, options: Booking) {
   await page.goto(`/agenda?date=${options.date}`);
   await page.getByRole('button', { name: 'Nouveau rendez-vous' }).click();
   const panel = page.getByRole('complementary', { name: 'Nouveau rendez-vous' });
@@ -15,7 +20,16 @@ export async function book(
   await panel.getByLabel('Date', { exact: true }).fill(options.date);
   await panel.getByLabel('Heure').fill(options.time);
   if (options.type) await selectContaining(panel.getByLabel('Type de rendez-vous'), options.type);
-  await panel.getByRole('button', { name: 'Enregistrer le rendez-vous' }).click();
+  return panel;
+}
+
+export const saveButton = (panel: Locator) =>
+  panel.getByRole('button', { name: 'Enregistrer le rendez-vous' });
+
+/** Prise de rendez-vous par l'interface (panneau « Nouveau rendez-vous » de l'agenda). */
+export async function book(page: Page, options: Booking) {
+  const panel = await fillAppointment(page, options);
+  await saveButton(panel).click();
   return panel;
 }
 

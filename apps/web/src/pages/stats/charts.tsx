@@ -147,6 +147,9 @@ export function ColumnChart<K extends string>({
               {buckets.map((b, i) => (
                 <div
                   key={b.start}
+                  // Colonne nommée : un nom sur un div sans rôle n'est pas annoncé (axe
+                  // « aria-prohibited-attr », trouvé en Phase 10).
+                  role="img"
                   tabIndex={0}
                   aria-label={`${b.label} : ${series.map((s) => `${s.label} ${format(b.values[s.key])}`).join(', ')}`}
                   className="relative flex h-full min-w-0 flex-1 items-end justify-center rounded-sm outline-offset-1 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-sky-700"

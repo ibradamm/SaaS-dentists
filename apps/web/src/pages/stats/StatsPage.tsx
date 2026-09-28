@@ -57,7 +57,8 @@ function Tile({
       <dt className="text-sm text-slate-600">{label}</dt>
       <dd className="text-2xl font-semibold text-slate-900">{value}</dd>
       {detail && <dd className="text-sm text-slate-600">{detail}</dd>}
-      {children}
+      {/* Dans une liste de définitions, un groupe ne contient que des dt et des dd. */}
+      {children && <dd>{children}</dd>}
     </div>
   );
 }

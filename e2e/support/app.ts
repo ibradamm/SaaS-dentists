@@ -77,13 +77,15 @@ export function createAdmin(clinicId: string, fullName = 'Anne Admin'): Account 
 
 /**
  * Code TOTP utilisable maintenant : le serveur accepte le pas courant à ±1 près, mais jamais
- * un pas déjà utilisé. Attend le pas suivant si nécessaire (au plus 30 s).
+ * un pas déjà utilisé. Jamais le pas précédent : si une frontière de 30 s passe entre la
+ * génération et la vérification, il serait à deux pas (refus observé en CI). Attend le pas
+ * suivant si nécessaire (au plus 30 s).
  */
 export async function totpFor(account: Account): Promise<string> {
   if (!account.totpSecret) throw new Error('Compte sans double authentification');
   for (;;) {
     const now = Math.floor(Date.now() / 1000 / 30);
-    const step = Math.max(now - 1, (account.lastStep ?? -Infinity) + 1);
+    const step = Math.max(now, (account.lastStep ?? -Infinity) + 1);
     if (step <= now + 1) {
       account.lastStep = step;
       return generate({ secret: account.totpSecret, epoch: step * 30 });

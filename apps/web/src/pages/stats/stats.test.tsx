@@ -88,6 +88,15 @@ describe('page « Statistiques »', () => {
       'href',
       `/patients/${IDS.patient}?encaisser=01a0de00-0000-7000-8000-00000000f001#paiements`,
     );
+    // Listes de définitions bien formées (règle axe « definition-list », trouvée en Phase 10) :
+    // chaque groupe ne contient que des dt et des dd.
+    const groups = [...document.querySelectorAll('dl > div')];
+    expect(groups.length).toBeGreaterThan(0);
+    for (const group of groups) {
+      expect(
+        [...group.children].map((c) => c.tagName).filter((t) => t !== 'DT' && t !== 'DD'),
+      ).toEqual([]);
+    }
   });
 
   it('secrétaire : aucune donnée de revenus affichée (section absente de la réponse)', async () => {
@@ -149,10 +158,10 @@ describe('page « Statistiques »', () => {
     setup('DENTIST');
     renderApp('/statistiques');
     const revenue = await screen.findByRole('group', { name: 'Évolution des revenus encaissés' });
-    const columns = within(revenue)
-      .getAllByRole('generic', { hidden: false })
-      .filter((e) => e.hasAttribute('tabindex'));
+    // Colonnes : images nommées (un nom sur un div sans rôle n'est pas annoncé), au clavier.
+    const columns = within(revenue).getAllByRole('img');
     expect(columns).toHaveLength(3);
+    expect(columns.every((c) => c.getAttribute('tabindex') === '0')).toBe(true);
     expect(flat(columns[2]!.getAttribute('aria-label'))).toBe(
       `jeudi 3 septembre 2026 : Encaissé ${eur(9000)}`,
     );
