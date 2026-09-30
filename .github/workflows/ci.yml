@@ -152,10 +152,11 @@ jobs:
       - name: Comptes de test par l'API publique
         run: pnpm --filter @dental/e2e staging:accounts --url https://localhost --admin-email admin.test@exemple.invalid --out "$RUNNER_TEMP/accounts.json"
       - name: check:deployment (10 contrôles, aucun ignoré)
+        # bash explicite : pipefail, sinon « | tee » masquerait un échec.
+        shell: bash
         run: |
-          # Poste vu par le proxy de périmètre : passerelle du réseau Docker de la pile.
-          ip=$(docker network inspect dental-staging-local_back -f '{{ (index .IPAM.Config 0).Gateway }}')
-          pnpm --filter @dental/e2e check:deployment --url https://localhost --accounts "$RUNNER_TEMP/accounts.json" --rate-limit --expect-ip "$ip" | tee "$RUNNER_TEMP/check.txt"
+          # Poste vu par le proxy de périmètre : passerelle du réseau de la pile (compose.yml).
+          pnpm --filter @dental/e2e check:deployment --url https://localhost --accounts "$RUNNER_TEMP/accounts.json" --rate-limit --expect-ip 172.28.0.1 | tee "$RUNNER_TEMP/check.txt"
           if grep -q '^IGNORÉ' "$RUNNER_TEMP/check.txt"; then echo "::error::contrôle ignoré"; exit 1; fi
       - name: Journaux des conteneurs sans secret ni jeton
         run: |
@@ -173,11 +174,11 @@ jobs:
 
   sentry:
     # Contrôle réel de la remontée vers Sentry (projet dental-staging), à la demande : commit
-    # dont le message contient [sentry-check]. DSN : secret du dépôt SENTRY_DSN_STAGING,
+    # dont le message commence par [sentry-check]. DSN : secret du dépôt SENTRY_DSN_STAGING,
     # jamais dans le dépôt (masqué dans les journaux par GitHub). Procédure :
     # docs/operations/deploiement-staging.md.
     name: Remontée réelle vers Sentry (staging)
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[sentry-check]')
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, '[sentry-check]')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

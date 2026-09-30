@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { generate } from 'otplib';
+import { httpSession, type HttpSession } from '../support/http-session';
 
 /*
  * Comptes de test synthétiques d'un environnement hébergé (staging), par l'API publique :
@@ -32,35 +33,12 @@ if (!values.url || !values['admin-email'] || !values.out || !temporary) {
 const base = new URL(values.url);
 const newPassword = () => randomBytes(18).toString('base64url');
 
-/** Client d'une session : cookie et jeton CSRF renouvelés à chaque étape d'authentification. */
-function session() {
-  let cookie = '';
-  let csrf = '';
-  return async <T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> => {
-    const res = await fetch(new URL(path, base), {
-      method,
-      headers: {
-        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-        ...(cookie ? { cookie } : {}),
-        ...(method === 'POST' ? { origin: base.origin, 'x-csrf-token': csrf } : {}),
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
-    const set = res.headers.getSetCookie().find((c) => c.includes('dental_session='));
-    if (set) cookie = set.split(';')[0] ?? '';
-    const json = (await res.json().catch(() => ({}))) as T & { csrfToken?: string };
-    if (!res.ok) throw new Error(`${method} ${path} : ${res.status} ${JSON.stringify(json)}`);
-    if (json.csrfToken) csrf = json.csrfToken;
-    return json;
-  };
-}
-
 interface Step {
   restriction: string | null;
 }
 
 /** Première connexion : mot de passe temporaire remplacé ; renvoie l'étape suivante. */
-async function firstLogin(call: ReturnType<typeof session>, email: string, password: string) {
+async function firstLogin(call: HttpSession, email: string, password: string) {
   const login = await call<Step>('POST', '/api/auth/login', { email, password });
   if (login.restriction !== 'PASSWORD_CHANGE_REQUIRED') {
     throw new Error(`${email} : étape inattendue (${login.restriction})`);
@@ -73,7 +51,7 @@ async function firstLogin(call: ReturnType<typeof session>, email: string, passw
   return { password: replacement, restriction: next.restriction };
 }
 
-const admin = session();
+const admin = httpSession(base);
 const adminEmail = values['admin-email'];
 const adminLogin = await firstLogin(admin, adminEmail, temporary);
 if (adminLogin.restriction !== 'MFA_ENROLLMENT_REQUIRED') {
@@ -89,7 +67,7 @@ const created = await admin<{ temporaryPassword: string }>('POST', '/api/users',
   fullName: 'Secrétaire de test',
   role: 'SECRETARY',
 });
-const secretary = await firstLogin(session(), secretaryEmail, created.temporaryPassword);
+const secretary = await firstLogin(httpSession(base), secretaryEmail, created.temporaryPassword);
 if (secretary.restriction !== null) {
   throw new Error(`secrétaire : étape inattendue (${secretary.restriction})`);
 }

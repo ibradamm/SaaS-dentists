@@ -116,3 +116,5 @@ networks:
     ipam:
       config:
         - subnet: 172.28.0.0/24
+          # Adresse du poste vue par le proxy de périmètre (CI : --expect-ip).
+          gateway: 172.28.0.1

@@ -7,7 +7,8 @@
     "e2e": "playwright test",
     "typecheck": "tsc --noEmit -p .",
     "check:deployment": "tsx scripts/check-deployment.ts",
-    "staging:accounts": "tsx scripts/staging-accounts.ts"
+    "staging:accounts": "tsx scripts/staging-accounts.ts",
+    "staging:timings": "tsx scripts/staging-timings.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.0",
