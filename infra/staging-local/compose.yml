@@ -43,7 +43,7 @@ services:
 
   migrate:
     <<: *server
-    command: ['node', 'dist/migrate.js']
+    command: ['sh', '-c', 'node dist/migrate.js && node dist/check-database.js']
     environment:
       APP_ENV: staging
       DATABASE_MIGRATION_URL: postgres://dental_owner:${DATABASE_OWNER_PASSWORD}@postgres:5432/dental

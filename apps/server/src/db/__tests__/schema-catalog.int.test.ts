@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { openTestDatabase } from '../../../test/db';
+import { checkDatabase } from '../check-database';
 import { DB_APP_ROLE, DB_OWNER_ROLE } from '../roles';
 
 /**
@@ -163,6 +164,21 @@ describe('catalogue du schéma', () => {
       WHERE p.clinic_id = $1 AND p.charge_id = $2 AND p.status = 'RECORDED'`);
     const plan = JSON.stringify(rows[0]?.['QUERY PLAN']);
     expect(plan).toContain('"Index Name":"payments_clinic_charge_idx"');
+  });
+
+  it('check-database (commande de déploiement) : base conforme, table sans RLS signalée', async () => {
+    expect(await checkDatabase(t.ownerPool)).toEqual([]);
+    const client = await t.ownerPool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('CREATE TABLE public.table_sans_rls (id int)');
+      expect(await checkDatabase(client)).toEqual([
+        'table table_sans_rls : RLS inactive non forcée 0 politique(s)',
+      ]);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
   });
 
   it('le rôle applicatif ne peut créer aucun objet dans le schéma public', async () => {

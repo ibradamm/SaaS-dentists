@@ -65,6 +65,37 @@ describe('heure locale et instants', () => {
     }
   });
 
+  it('Casablanca : UTC+1 toute l’année, UTC+0 pendant le ramadan (15 février - 22 mars 2026)', () => {
+    const CASABLANCA = 'Africa/Casablanca';
+    expect(iso(wallClockToInstant('2026-01-12', H(9), CASABLANCA))).toBe(
+      '2026-01-12T08:00:00.000Z',
+    );
+    expect(iso(wallClockToInstant('2026-03-02', H(9), CASABLANCA))).toBe(
+      '2026-03-02T09:00:00.000Z',
+    );
+    expect(iso(wallClockToInstant('2026-04-06', H(9), CASABLANCA))).toBe(
+      '2026-04-06T08:00:00.000Z',
+    );
+    // Entrée (15 février, 3 h → 2 h) : journée de 25 h, 2 h 30 ambiguë = première occurrence.
+    const day = (date: string) =>
+      (wallClockToInstant(date, 1440, CASABLANCA) - wallClockToInstant(date, 0, CASABLANCA)) /
+      3_600_000;
+    expect(day('2026-02-15')).toBe(25);
+    const ambiguous = localDateTimeToInstant('2026-02-15T02:30', CASABLANCA);
+    expect(ambiguous.ok && iso(ambiguous.instant)).toBe('2026-02-15T01:30:00.000Z');
+    // Sortie (22 mars, 2 h → 3 h) : journée de 23 h, 2 h 30 inexistante refusée.
+    expect(day('2026-03-22')).toBe(23);
+    expect(localDateTimeToInstant('2026-03-22T02:30', CASABLANCA)).toEqual({
+      ok: false,
+      code: 'NONEXISTENT',
+    });
+    // Une matinée de consultation (8 h - 12 h) dure 4 h de part et d'autre du changement.
+    for (const date of ['2026-02-14', '2026-02-16', '2026-03-21', '2026-03-23']) {
+      const start = wallClockToInstant(date, H(8), CASABLANCA);
+      expect(hours({ start, end: wallClockToInstant(date, H(12), CASABLANCA) })).toBe(4);
+    }
+  });
+
   it('dates locales : aujourd’hui dans le fuseau du cabinet, jours ISO, parcours inclusif', () => {
     // 23 h 30 UTC le 26 = déjà le 27 à Paris.
     expect(localToday(PARIS, new Date('2026-09-26T23:30:00Z'))).toBe('2026-09-27');

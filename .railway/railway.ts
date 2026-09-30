@@ -34,13 +34,15 @@ export default defineRailway(() => {
     SENTRY_RELEASE: '${{RAILWAY_GIT_COMMIT_SHA}}',
   };
 
-  // Rôles, base et migrations, puis arrêt : seul service qui détient les accès propriétaire
-  // et administrateur de PostgreSQL. À déployer avant l'API et le worker.
+  // Rôles, base, migrations et contrôle des invariants de sécurité (RLS, rôles, journal), puis
+  // arrêt : seul service qui détient les accès propriétaire et administrateur de PostgreSQL.
+  // À déployer avant l'API et le worker ; échoue si la base n'est pas conforme.
   const migrate = service('migrate', {
     source,
     build: server,
     deploy: {
-      startCommand: 'sh -c "node dist/bootstrap.js && node dist/migrate.js"',
+      startCommand:
+        'sh -c "node dist/bootstrap.js && node dist/migrate.js && node dist/check-database.js"',
       restartPolicyType: 'NEVER',
     },
     replicas: { [REGION]: 1 },

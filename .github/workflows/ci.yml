@@ -136,7 +136,8 @@ jobs:
       - name: Pile prête (HTTPS par le proxy de périmètre)
         run: |
           for i in $(seq 1 90); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' https://localhost/api/auth/me || true)
+            # curl ne lit pas NODE_EXTRA_CA_CERTS (Node seulement) : autorité de test explicite.
+            code=$(curl -s -o /dev/null -w '%{http_code}' --cacert "$NODE_EXTRA_CA_CERTS" https://localhost/api/auth/me || true)
             [ "$code" = 401 ] && exit 0
             sleep 2
           done
@@ -169,6 +170,32 @@ jobs:
       - name: Journaux de la pile en cas d'échec
         if: failure()
         run: $COMPOSE ps -a && $COMPOSE logs --no-color --tail 200
+
+  sentry:
+    # Contrôle réel de la remontée vers Sentry (projet dental-staging), à la demande : commit
+    # dont le message contient [sentry-check]. DSN : secret du dépôt SENTRY_DSN_STAGING,
+    # jamais dans le dépôt (masqué dans les journaux par GitHub). Procédure :
+    # docs/operations/deploiement-staging.md.
+    name: Remontée réelle vers Sentry (staging)
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[sentry-check]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: sentry:check (erreur contrôlée, contenu de l'envoi affiché)
+        env:
+          APP_ENV: staging
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN_STAGING }}
+          SENTRY_RELEASE: ${{ github.sha }}
+        run: |
+          if [ -z "$SENTRY_DSN" ]; then echo "::error::secret SENTRY_DSN_STAGING absent"; exit 1; fi
+          pnpm --filter @dental/server sentry:check
 
   secrets:
     name: Détection de secrets (gitleaks)
