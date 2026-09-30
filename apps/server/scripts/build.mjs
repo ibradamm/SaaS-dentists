@@ -11,6 +11,7 @@ await build({
   entryPoints: {
     'main-api': 'src/main-api.ts',
     'main-worker': 'src/main-worker.ts',
+    bootstrap: 'src/db/cli/bootstrap.ts',
     migrate: 'src/db/cli/migrate.ts',
     'create-clinic': 'src/db/cli/create-clinic.ts',
     'create-admin': 'src/db/cli/create-admin.ts',

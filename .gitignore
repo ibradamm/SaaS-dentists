@@ -42,3 +42,5 @@ e2e/artifacts/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+# Certificats de test de la pile staging locale (infra/staging-local/certs.sh)
+infra/staging-local/.certs/

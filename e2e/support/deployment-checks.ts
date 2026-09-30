@@ -24,6 +24,13 @@ export interface DeploymentCheckOptions {
   local?: boolean;
   /** Compte de test synthétique sans double authentification (secrétaire) : cookies. */
   account?: { email: string; password: string };
+  /**
+   * Administrateur du même cabinet (double authentification) : lit dans le journal d'audit
+   * l'adresse enregistrée pour la connexion de la secrétaire.
+   */
+  admin?: { email: string; password: string; code: () => Promise<string> };
+  /** Adresse du poste qui lance les contrôles, si elle est connue (sinon : adresse publique). */
+  expectIp?: string;
   /** Tentatives de connexion pour vérifier la limitation derrière le proxy (12 requêtes). */
   rateLimit?: boolean;
 }
@@ -31,6 +38,10 @@ export interface DeploymentCheckOptions {
 const EVIL_ORIGIN = 'https://attaquant.example';
 const LEAKS = /select |insert |\bat \w+ \(|node_modules|\/home\/|\/app\/|stack|Error:/i;
 const MIN_HSTS_SECONDS = 15_552_000; // 180 jours
+// Adresses privées, de bouclage, locales ou partagées (CGNAT) : celles d'un proxy, jamais
+// celle d'un poste vu depuis Internet.
+const INTERNAL_IP =
+  /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1$|f[cd]|fe80:)/i;
 
 export async function runDeploymentChecks(options: DeploymentCheckOptions): Promise<CheckResult[]> {
   const base = new URL(options.url);
@@ -176,6 +187,7 @@ export async function runDeploymentChecks(options: DeploymentCheckOptions): Prom
       : ['ÉCHEC', problems.join(' ; ')];
   });
 
+  let secretaryId: string | undefined;
   await check('Cookie de session', async () => {
     if (!options.account) return ['IGNORÉ', 'aucun compte de test fourni (--email, --password)'];
     const login = await fetch(at('/api/auth/login'), {
@@ -199,6 +211,7 @@ export async function runDeploymentChecks(options: DeploymentCheckOptions): Prom
     const pair = cookie.split(';')[0] ?? '';
     const me = await fetch(at('/api/auth/me'), { headers: { cookie: pair } });
     if (me.status !== 200) problems.push(`session non reconnue : ${me.status}`);
+    else secretaryId = ((await me.json()) as { user: { id: string } }).user.id;
     const logout = await fetch(at('/api/auth/logout'), {
       method: 'POST',
       headers: { cookie: pair, 'x-csrf-token': csrfToken ?? '', origin: base.origin },
@@ -217,17 +230,81 @@ export async function runDeploymentChecks(options: DeploymentCheckOptions): Prom
       : ['ÉCHEC', problems.join(' ; ')];
   });
 
-  await check('Limitation derrière le proxy (X-Forwarded-For usurpé)', async () => {
+  await check('Adresse du client dans le journal d’audit', async () => {
+    if (!options.admin) return ['IGNORÉ', 'aucun administrateur de test fourni (--accounts)'];
+    if (!secretaryId) return ['ÉCHEC', 'connexion de la secrétaire absente (contrôle précédent)'];
+    // La connexion de la secrétaire (contrôle précédent) est tracée avec l'adresse vue par
+    // l'API : celle du poste, jamais celle d'un proxy de l'hébergeur ou de Caddy.
+    const json = { 'content-type': 'application/json' };
+    const login = await fetch(at('/api/auth/login'), {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify({ email: options.admin.email, password: options.admin.password }),
+    });
+    const pair = login.headers
+      .getSetCookie()
+      .find((c) => /dental_session=/.test(c))
+      ?.split(';')[0];
+    const { csrfToken } = (await login.json().catch(() => ({}))) as { csrfToken?: string };
+    if (!pair) return ['ÉCHEC', `connexion de l'administrateur : ${login.status}`];
+    const verify = await fetch(at('/api/auth/mfa/verify'), {
+      method: 'POST',
+      headers: { ...json, cookie: pair, 'x-csrf-token': csrfToken ?? '', origin: base.origin },
+      body: JSON.stringify({ code: await options.admin.code() }),
+    });
+    const session = verify.headers.getSetCookie().find((c) => /dental_session=/.test(c));
+    const cookie = session?.split(';')[0] ?? pair;
+    const day = (offset: number) => new Date(Date.now() + offset).toISOString().slice(0, 10);
+    const query = new URLSearchParams({
+      from: day(-86_400_000),
+      to: day(86_400_000),
+      actorId: secretaryId,
+      action: 'auth.login_succeeded',
+      limit: '1',
+    });
+    const res = await fetch(at(`/api/audit-logs?${query}`), { headers: { cookie } });
+    const body = (await res.json().catch(() => ({}))) as { entries?: { ip: string | null }[] };
+    const { csrfToken: after } = (await verify.json().catch(() => ({}))) as { csrfToken?: string };
+    await fetch(at('/api/auth/logout'), {
+      method: 'POST',
+      headers: { cookie, 'x-csrf-token': after ?? '', origin: base.origin },
+    });
+    const ip = body.entries?.[0]?.ip;
+    if (verify.status === 401) {
+      return [
+        'ÉCHEC',
+        'code de double authentification refusé (usage unique : relancer après 30 s)',
+      ];
+    }
+    if (verify.status !== 200 || res.status !== 200 || !ip) {
+      return ['ÉCHEC', `journal illisible (code ${verify.status}, journal ${res.status})`];
+    }
+    if (options.local) return ['OK', `pile locale : ${ip}`];
+    if (options.expectIp) {
+      return ip === options.expectIp
+        ? ['OK', `adresse du poste enregistrée (${ip})`]
+        : ['ÉCHEC', `${ip} enregistrée au lieu de ${options.expectIp}`];
+    }
+    return INTERNAL_IP.test(ip)
+      ? ['ÉCHEC', `adresse interne enregistrée (${ip}) : celle d'un proxy, pas du poste`]
+      : ['OK', `adresse publique du poste enregistrée (${ip})`];
+  });
+
+  await check('Limitation derrière le proxy (adresse du client usurpée)', async () => {
     if (!options.rateLimit) return ['IGNORÉ', 'désactivé (--rate-limit pour l’activer)'];
-    // 12 tentatives sur des adresses inexistantes, chacune avec une fausse adresse IP : si le
-    // proxy et API_TRUST_PROXY_HOPS sont justes, la limite (10 par minute) s'applique quand même.
+    // 12 tentatives sur des adresses inexistantes, chacune avec une fausse adresse IP dans les
+    // deux en-têtes qu'un proxy peut lire (X-Forwarded-For, X-Real-IP) : si les proxys de
+    // confiance (Caddy) et API_TRUST_PROXY_HOPS sont justes, la limite (10 par minute)
+    // s'applique quand même.
     const statuses: number[] = [];
     for (let i = 0; i < 12; i++) {
+      const spoofed = `203.0.113.${i + 1}`;
       const res = await fetch(at('/api/auth/login'), {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-forwarded-for': `203.0.113.${i + 1}`,
+          'x-forwarded-for': spoofed,
+          'x-real-ip': spoofed,
         },
         body: JSON.stringify({
           email: `inexistant.${randomBytes(4).toString('hex')}@exemple.invalid`,
@@ -237,10 +314,10 @@ export async function runDeploymentChecks(options: DeploymentCheckOptions): Prom
       statuses.push(res.status);
     }
     return statuses.includes(429)
-      ? ['OK', `429 atteint malgré l'en-tête usurpé (${statuses.join(' ')})`]
+      ? ['OK', `429 atteint malgré les en-têtes usurpés (${statuses.join(' ')})`]
       : [
           'ÉCHEC',
-          `aucun 429 : l'adresse du client est lue dans l'en-tête usurpé (${statuses.join(' ')})`,
+          `aucun 429 : l'adresse du client est lue dans un en-tête usurpé (${statuses.join(' ')})`,
         ];
   });
 

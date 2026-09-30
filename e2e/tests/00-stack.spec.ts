@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { SECURITY_HEADERS } from '../../apps/web/security-headers';
-import { cspViolations, setupClinic, signIn, watchCsp } from '../support/app';
+import { cspViolations, setupClinic, signIn, totpFor, watchCsp } from '../support/app';
 import { runDeploymentChecks } from '../support/deployment-checks';
 import { BASE_URL } from '../support/env';
 
@@ -56,14 +56,19 @@ test('outil de vérification du déploiement (Phase 11), exercé sur la pile loc
     url: BASE_URL,
     local: true,
     account: { email: clinic.secretary.email, password: clinic.secretary.password },
+    admin: { ...clinic.admin, code: () => totpFor(clinic.admin) },
   });
   expect(results.filter((r) => r.status === 'ÉCHEC')).toEqual([]);
+  // Connexion de la secrétaire tracée avec l'adresse du poste (pile locale : 127.0.0.1).
+  expect(results.find((r) => r.name === 'Adresse du client dans le journal d’audit')?.detail).toBe(
+    'pile locale : 127.0.0.1',
+  );
   // HTTPS, redirection et TLS n'existent pas en local ; la limitation y est relevée.
   expect(results.filter((r) => r.status === 'IGNORÉ').map((r) => r.name)).toEqual([
     'HTTPS',
     'Redirection HTTP → HTTPS',
     'TLS',
-    'Limitation derrière le proxy (X-Forwarded-For usurpé)',
+    'Limitation derrière le proxy (adresse du client usurpée)',
   ]);
-  expect(results).toHaveLength(9);
+  expect(results).toHaveLength(10);
 });

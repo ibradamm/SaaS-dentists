@@ -1,0 +1,23 @@
+# Proxy de l'interface derrière le proxy de l'hébergeur, qui termine TLS et redirige HTTP vers
+# HTTPS (Railway : docs/operations/deploiement-staging.md). Caddy écoute en HTTP sur $PORT.
+#
+# Variables :
+#   PORT                   port fourni par l'hébergeur
+#   API_UPSTREAM           adresse privée de l'API, par exemple api.railway.internal:3000
+#   CADDY_TRUSTED_PROXIES  plages d'adresses du proxy de l'hébergeur (seules autorisées à
+#                          fournir l'adresse du client dans X-Real-IP). À vérifier sur
+#                          l'hébergement réel : check:deployment --rate-limit usurpe
+#                          X-Real-IP et X-Forwarded-For.
+{
+	admin off
+	persist_config off
+	auto_https off
+	servers {
+		trusted_proxies static {$CADDY_TRUSTED_PROXIES}
+		client_ip_headers X-Real-IP
+	}
+}
+
+:{$PORT} {
+	import app.caddy
+}

@@ -107,6 +107,69 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  staging-local:
+    name: Pile staging locale (images de production, HTTPS, check:deployment)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      COMPOSE: docker compose -f infra/staging-local/compose.yml
+      NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/infra/staging-local/.certs/ca.pem
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Secrets éphémères du job (masqués, jamais affichés)
+        run: |
+          secret() { node -e "process.stdout.write(require('crypto').randomBytes($1).toString('$2'))"; }
+          for name in PG_ADMIN_PASSWORD DATABASE_OWNER_PASSWORD DATABASE_APP_PASSWORD; do
+            value=$(secret 24 base64url); echo "::add-mask::$value"; echo "$name=$value" >> "$GITHUB_ENV"
+          done
+          key=$(secret 32 base64); echo "::add-mask::$key"; echo "DATA_ENCRYPTION_KEY=$key" >> "$GITHUB_ENV"
+      - name: Autorité et certificat de test
+        run: bash infra/staging-local/certs.sh infra/staging-local/.certs
+      - name: Images de production et pile (proxy de périmètre, Caddy, API, worker, PostgreSQL)
+        run: $COMPOSE up -d --build
+      - name: Pile prête (HTTPS par le proxy de périmètre)
+        run: |
+          for i in $(seq 1 90); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://localhost/api/auth/me || true)
+            [ "$code" = 401 ] && exit 0
+            sleep 2
+          done
+          $COMPOSE ps -a; $COMPOSE logs --no-color; exit 1
+      - name: Cabinet marocain et administrateur de test (commandes de production)
+        run: |
+          clinic=$($COMPOSE run --rm --no-deps -T migrate node dist/create-clinic.js --name "Cabinet Test Casablanca" --timezone Africa/Casablanca --locale fr-MA --currency MAD --country MA | sed -n 's/Cabinet créé : //p')
+          password=$($COMPOSE run --rm --no-deps -T migrate node dist/create-admin.js --clinic "$clinic" --email admin.test@exemple.invalid --name "Admin Test" | sed -n 's/.*affiché une seule fois) : //p')
+          test -n "$password"
+          echo "::add-mask::$password"
+          echo "ADMIN_TEMPORARY_PASSWORD=$password" >> "$GITHUB_ENV"
+      - name: Comptes de test par l'API publique
+        run: pnpm --filter @dental/e2e staging:accounts --url https://localhost --admin-email admin.test@exemple.invalid --out "$RUNNER_TEMP/accounts.json"
+      - name: check:deployment (10 contrôles, aucun ignoré)
+        run: |
+          # Poste vu par le proxy de périmètre : passerelle du réseau Docker de la pile.
+          ip=$(docker network inspect dental-staging-local_back -f '{{ (index .IPAM.Config 0).Gateway }}')
+          pnpm --filter @dental/e2e check:deployment --url https://localhost --accounts "$RUNNER_TEMP/accounts.json" --rate-limit --expect-ip "$ip" | tee "$RUNNER_TEMP/check.txt"
+          if grep -q '^IGNORÉ' "$RUNNER_TEMP/check.txt"; then echo "::error::contrôle ignoré"; exit 1; fi
+      - name: Journaux des conteneurs sans secret ni jeton
+        run: |
+          $COMPOSE logs --no-color > "$RUNNER_TEMP/logs.txt"
+          for value in "$PG_ADMIN_PASSWORD" "$DATABASE_OWNER_PASSWORD" "$DATABASE_APP_PASSWORD" "$DATA_ENCRYPTION_KEY" "$ADMIN_TEMPORARY_PASSWORD"; do
+            if grep -qF -- "$value" "$RUNNER_TEMP/logs.txt"; then echo "::error::secret dans les journaux"; exit 1; fi
+          done
+          if grep -qiE 'dental_session=|"cookie":|"authorization":|x-csrf-token' "$RUNNER_TEMP/logs.txt"; then
+            echo "::error::jeton de session dans les journaux"; exit 1
+          fi
+          echo "$(wc -l < "$RUNNER_TEMP/logs.txt") lignes de journaux contrôlées"
+      - name: Journaux de la pile en cas d'échec
+        if: failure()
+        run: $COMPOSE ps -a && $COMPOSE logs --no-color --tail 200
+
   secrets:
     name: Détection de secrets (gitleaks)
     runs-on: ubuntu-24.04
