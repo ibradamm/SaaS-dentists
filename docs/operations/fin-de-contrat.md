@@ -1,5 +1,7 @@
 # Fin de contrat d'un cabinet : restitution, suppression, sauvegardes, litiges
 
+> **À faire valider par un juriste marocain avant utilisation.** Les étapes techniques sont testées ; les délais et engagements envers le cabinet relèvent du contrat, encore à l'état de projet.
+
 - **Statut :** procédure prête, **jamais exécutée sur un hébergement** : aucun staging n'existe. Les commandes ont été exécutées sur la base locale et, en CI, avec les images de production.
 - **Décisions :** [ADR 0014](../adr/0014-conservation-restitution-suppression.md).
 - **Durées :** [tableau de conservation](../conformite/tableau-de-conservation.md).
@@ -57,7 +59,7 @@ Cette forme de `railway ssh` (commande passée en argument) **n'a pas été vér
 ## 3. Ce que la purge ne supprime pas
 
 - **Sauvegardes et restauration à un instant donné** : elles expirent seules (section 4).
-- **Journaux de l'hébergeur** : adresses IP des postes et chemins des requêtes, sans donnée patient ; durée fixée par l'hébergeur, non vérifiée.
+- **Journaux de l'hébergeur** : adresses IP des postes, navigateur et chemins des requêtes, 7 ou 30 jours selon l'offre. Le texte des recherches de patients y figure peut-être (écart E19, NON VÉRIFIÉ).
 - **Sentry** : erreurs sans donnée personnelle par conception.
 - **Registre d'exploitation** : aucune donnée patient.
 - **Fichiers d'export** : supprimés à la remise (étape 4).
@@ -66,7 +68,7 @@ Cette forme de `railway ssh` (commande passée en argument) **n'a pas été vér
 
 - Une purge ne touche pas les sauvegardes. Les données du cabinet y restent jusqu'à leur expiration :
   - instantanés du volume : quotidiens 6 jours, hebdomadaires 27 jours, **mensuels 89 jours** ;
-  - restauration à un instant donné : environ 4 semaines.
+  - restauration à un instant donné : environ 4 semaines (archive dans un bucket opéré par Tigris).
 
   Source : documentation Railway, [sauvegarde-restauration.md](sauvegarde-restauration.md). À confirmer sur l'offre souscrite.
 - Le contrat doit l'annoncer : **suppression effective des sauvegardes au plus tard [89] jours après la purge**.

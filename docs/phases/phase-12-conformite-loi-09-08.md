@@ -75,3 +75,19 @@ Documents préparés, **à faire relire** :
 **Par chaque cabinet :** formalités CNDP, durées de conservation, affichage de la notice.
 
 **Sur le staging, dès qu'il existe :** toute la procédure de fin de contrat, dont `railway ssh` avec une commande en argument, et le rejeu d'une purge après restauration d'une sauvegarde.
+
+## 4. Seconde passe (2026-10-01) : vérification, dossier juriste, hébergement
+
+Phase 12 validée techniquement par le porteur du projet. Travail gratuit seulement : aucun déploiement, aucune dépense, aucun fournisseur contacté.
+
+| Demande | Résultat |
+|---|---|
+| Textes officiels | **Toujours inaccessibles** (refus du proxy pour `cndp.ma`, `tax.gov.ma`, `sgg.gov.ma`, `adala.justice.gov.ma`, `dgssi.gov.ma`). Aucune affirmation n'a le statut TEXTE OFFICIEL VÉRIFIÉ ; [sources.md](../conformite/sources.md) classe chaque affirmation (source secondaire, interprétation, non vérifié) |
+| Nouveaux éléments | Délibération CNDP **D-941-2025** (autorisation type pour le « suivi des patients ») ; **décret 2-24-921** (prestataires cloud qualifiés par la DGSSI : champ d'application à vérifier) ; mentions types de sous-traitance de la CNDP ; articles 24 et 26 |
+| Dossier pour le juriste | [dossier-juriste.md](../conformite/dossier-juriste.md) : le logiciel en une page, données, rôles, hébergement, conservation, fin de contrat, **10 questions** |
+| Relecture | [relecture.md](../conformite/relecture.md) : 8 erreurs corrigées, dont **R1 : l'administrateur lit les notes médicales**, que nos documents disaient réservées au dentiste. Bandeau « À faire valider par un juriste marocain avant utilisation. » sur chaque projet |
+| Hébergement au Maroc | [hebergement-maroc.md](../conformite/hebergement-maroc.md). Options : OCI Casablanca (seul service géré trouvé ; PostgreSQL à confirmer), inwi, OVHcloud Local Zone, Maroc Telecom, N+ONE ; comparaison avec Railway |
+| Railway et Sentry | [demandes-fournisseurs.md](../conformite/demandes-fournisseurs.md) : deux messages prêts, **non envoyés** |
+| Écarts et purges | [decisions-a-prendre.md](../conformite/decisions-a-prendre.md) : E9 à E17 un par un. Trois nouveaux écarts : **E18** (notes lues par l'administrateur), **E19** (journaux HTTP de l'hébergeur et texte des recherches de patients), **E20** (Tigris, sous-traitant de Railway). Purges techniques : arbitraires mais raisonnables, sans lien avec une obligation légale ; **non modifiées** |
+
+Produit : aucun changement de comportement. Seuls le titre d'un test de bout en bout (accès aux notes médicales) et le rapport de la phase 10 ont été rendus exacts.

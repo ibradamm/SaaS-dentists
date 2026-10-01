@@ -89,7 +89,7 @@ test('appels directs refusés par le serveur, même en contournant l’interface
   }
 });
 
-test('notes médicales : dentiste seulement, lecture tracée, heure du cabinet', async () => {
+test('notes médicales : le dentiste oui, la secrétaire non, lecture tracée, heure du cabinet', async () => {
   const dentist = pages.DENTIST;
   await dentist.goto(`/patients/${patientId}`);
   await dentist.getByRole('button', { name: 'Afficher les notes médicales' }).click();

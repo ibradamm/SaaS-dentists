@@ -1,6 +1,6 @@
 # Contrat de sous-traitance de données à caractère personnel
 
-> **PROJET À FAIRE RELIRE PAR UN JURISTE MAROCAIN.** Rédigé à partir du fonctionnement réel du service et d'éléments préliminaires sur la loi 09-08 ([sources.md](sources.md)). Les textes officiels n'ont pas pu être lus pendant la rédaction. Les références d'articles sont à vérifier. Les crochets `[…]` sont à compléter ou à décider.
+> **À faire valider par un juriste marocain avant utilisation.** Projet, pas un document juridique définitif. Rédigé à partir du fonctionnement réel du service et d'éléments préliminaires sur la loi 09-08 ([sources.md](sources.md)). Les textes officiels n'ont pas pu être lus pendant la rédaction. Les références d'articles sont à vérifier ; le statut de chaque affirmation juridique figure dans [sources.md](sources.md). Les crochets `[…]` sont à compléter ou à décider. À comparer aux [mentions types de sous-traitance de la CNDP](https://cndp.ma/fr/responsabilites/mentions-types/sous-traitance.html).
 
 **Entre**
 - [Raison sociale du cabinet], [forme], [adresse], représenté par [Dr …], ci-après « **le Responsable** » ;
@@ -16,7 +16,7 @@ Le contrat suit la durée du contrat de service. Les articles 5 (confidentialit�
 
 ## Article 3 — Description des traitements
 
-Voir l'annexe 1 : finalités, catégories de personnes et de données, opérations, durées. Les données de santé sont des **données sensibles** au sens de la loi 09-08.
+Voir l'annexe 1 : finalités, catégories de personnes et de données, opérations, durées. Les données de santé sont des **données sensibles** au sens de la loi 09-08 [article 1 ; SOURCE SECONDAIRE, à vérifier].
 
 ## Article 4 — Instructions
 
@@ -33,7 +33,7 @@ Voir l'annexe 1 : finalités, catégories de personnes et de données, opératio
 2. Chacune est soumise à une **obligation écrite de secret**, qui survit à ses fonctions. La liste des personnes habilitées est tenue à jour et communiquée sur demande.
 3. Tout accès aux données d'un cabinet par le Sous-traitant est inscrit à un registre d'exploitation : date, personne, motif, sans donnée patient.
 
-*[Note pour le juriste : l'article 22 réserve, d'après une source secondaire, le régime déclaratif aux traitements mis en œuvre par une personne « soumise à une obligation de secret ». Cette clause suffit-elle ?]*
+*[Note pour le juriste : l'article 22 réserverait le régime déclaratif aux traitements mis en œuvre par une personne « soumise à une obligation de secret » ; l'article 26 imposerait le secret à toute personne ayant connaissance des données (SOURCE SECONDAIRE pour les deux). Cette clause suffit-elle ? Question 2 du [dossier](dossier-juriste.md).]*
 
 ## Article 6 — Sécurité
 
@@ -42,13 +42,13 @@ Le Sous-traitant met en œuvre les mesures de l'**annexe 2** et les maintient pe
 ## Article 7 — Sous-traitants ultérieurs
 
 1. Le Responsable autorise le recours aux sous-traitants ultérieurs de l'**annexe 4**.
-2. Tout ajout ou remplacement est notifié **[30] jours** à l'avance ; le Responsable peut s'y opposer pour un motif légitime. [Conséquence de l'opposition : à décider.]
+2. Tout ajout ou remplacement est notifié **[30] jours** à l'avance ; le Responsable peut s'y opposer pour un motif légitime. [Conséquence de l'opposition : à décider.] [Les mentions types de la CNDP prévoiraient une **autorisation expresse** du responsable pour chaque sous-traitant ultérieur (SOURCE SECONDAIRE) : autorisation générale ou expresse, à trancher.]
 3. Le Sous-traitant impose à chacun des obligations au moins équivalentes et reste responsable de leur exécution.
 
 ## Article 8 — Transferts hors du Maroc
 
 1. Les données sont hébergées dans les pays de l'**annexe 4**. Aucun autre pays sans information préalable du Responsable dans les conditions de l'article 7.
-2. Les formalités auprès de la CNDP, y compris la **demande de transfert à l'étranger**, incombent au Responsable. Le Sous-traitant lui fournit les éléments de l'**annexe 5** et toute information utile.
+2. Les formalités auprès de la CNDP, y compris la **demande de transfert à l'étranger**, incombent au Responsable [INTERPRÉTATION, à valider]. Le Sous-traitant lui fournit les éléments de l'**annexe 5** et toute information utile.
 3. [À décider avec le juriste : traitement des accès techniques depuis un pays ne figurant pas sur la liste de la CNDP, par exemple le support de l'hébergeur.]
 
 ## Article 9 — Assistance
@@ -71,8 +71,8 @@ Le Sous-traitant aide le Responsable, dans des délais compatibles avec ses obli
 4. **Suppression.** **[30] jours** après la remise de l'export, sauf instruction écrite contraire ou conservation pour litige (article 11), le Sous-traitant supprime toutes les données du cabinet de sa base de production.
 5. **Sauvegardes.** Les données subsistent dans les sauvegardes jusqu'à leur expiration, **au plus tard [89] jours** après la suppression. Elles ne sont ni consultées ni restaurées pour ce cabinet. En cas de restauration de la base pour un incident, la suppression est rejouée avant toute remise en service.
 6. **Attestation.** Le Sous-traitant remet une attestation indiquant la date de suppression et la date d'expiration de la dernière sauvegarde concernée.
-7. Restent hors de la suppression, faute de données patient :
-   - les journaux techniques de l'hébergeur (adresses IP des postes, chemins des requêtes ; durée : annexe 3) ;
+7. Restent hors de la suppression :
+   - les journaux techniques de l'hébergeur (adresses IP des postes, navigateur, chemins des requêtes ; 7 ou 30 jours selon l'offre). [À vérifier avant signature : si l'hébergeur enregistre aussi le texte des recherches présent dans l'adresse, ces journaux contiennent des noms de patients ; écart E19 de [decisions-a-prendre.md](decisions-a-prendre.md).] ;
    - le registre d'exploitation.
 
 ## Article 11 — Litiges
@@ -119,12 +119,12 @@ Droit marocain. [Juridiction compétente.]
 
 ## Annexe 2 — Mesures de sécurité (état au [date])
 
-Mesures en place, chacune vérifiée par des tests automatiques :
+**A. Mesures du logiciel**, vérifiées par des tests automatiques sur une installation locale (pas encore sur l'hébergement) :
 - **Isolation par cabinet :**
   - sécurité au niveau des lignes (RLS) activée et forcée sur toutes les tables ;
   - filtre explicite par cabinet dans chaque requête ;
   - tests systématiques d'accès d'un cabinet aux données d'un autre.
-- **Contrôle d'accès par rôle** (administrateur, dentiste, secrétaire), vérifié côté serveur. Notes médicales réservées au dentiste ; chaque lecture est tracée.
+- **Contrôle d'accès par rôle** (administrateur, dentiste, secrétaire), vérifié côté serveur. Notes médicales accessibles aux rôles **dentiste et administrateur**, jamais à la secrétaire ; chaque lecture est tracée. [Accès de l'administrateur non soignant : à arbitrer, écart E18.]
 - **Authentification :**
   - mots de passe Argon2id ;
   - verrouillage après 10 échecs (15 minutes) ;
@@ -135,12 +135,14 @@ Mesures en place, chacune vérifiée par des tests automatiques :
 - **Chiffrement :**
   - notes médicales chiffrées dans l'application (AES-256-GCM) ;
   - clé distincte de la base, avec une copie indépendante ;
-  - connexions en HTTPS.
+  - connexions en HTTPS (vérifié sur la pile locale ; à vérifier sur l'hébergement).
 - **Traçabilité :** journal d'audit en ajout seul. Il ne recopie jamais un contenu saisi.
 - **Moindre privilège :** l'application n'a aucun droit de contournement de la sécurité de la base ; seul le service d'administration détient les accès propriétaire et administrateur.
-- **Journaux et remontée d'erreurs :** aucune valeur saisie ; la remontée d'erreurs n'envoie aucune donnée personnelle.
+- **Journaux et remontée d'erreurs :** aucune valeur saisie dans nos journaux ; la remontée d'erreurs est conçue pour n'envoyer aucune donnée personnelle (vérifié par des tests ; aucun envoi réel à Sentry observé à ce jour).
 - **Données de test** fictives uniquement, hors production.
-- **Sauvegardes :** quotidiennes, hebdomadaires et mensuelles, plus la restauration à un instant donné, chez l'hébergeur. [Exercice de restauration sur l'hébergement : **à réaliser** avant la mise en service.]
+**B. Mesures de l'hébergement** (documentation du fournisseur, **non vérifiées par nous**) :
+- **Sauvegardes :** quotidiennes, hebdomadaires et mensuelles, plus la restauration à un instant donné. [Exercice de restauration sur l'hébergement : **à réaliser** avant la mise en service.]
+- **Contrôle d'accès physique aux installations** (article 24, SOURCE SECONDAIRE) : datacenters de l'hébergeur, attestation à obtenir.
 - **Fin de contrat :** export complet, conservation pour litige, suppression sur instruction (article 10).
 
 Points non vérifiés à ce jour :
@@ -157,7 +159,8 @@ Voir [tableau-de-conservation.md](tableau-de-conservation.md), à reprendre ici 
 | Sous-traitant | Prestation | Données | Pays d'hébergement | Siège |
 |---|---|---|---|---|
 | Railway Corporation | Hébergement (calcul, base de données, sauvegardes, journaux) | Toutes | Pays-Bas (région Europe de l'Ouest) ; [sauvegardes et journaux : à confirmer] | États-Unis |
-| Functional Software Inc. (Sentry), si activé | Remontée d'erreurs | Aucune donnée personnelle par conception | Union européenne [à confirmer] | États-Unis |
+| Tigris Data, via Railway | Stockage de l'archive de restauration à un instant donné (bucket) | Toutes (archive de la base) | Région choisie à la création du bucket [UE prévue, à confirmer] | États-Unis [à confirmer] |
+| Functional Software Inc. (Sentry), si activé | Remontée d'erreurs | Aucune donnée personnelle par conception | Allemagne (Francfort) ; certaines métadonnées de compte aux États-Unis [à confirmer par écrit] | États-Unis |
 
 [À revoir si le choix se porte sur un hébergeur au Maroc.]
 
