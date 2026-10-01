@@ -1,6 +1,6 @@
 # Image de l'interface : fichiers compilés servis par Caddy, qui relaie /api vers l'API
 # (infra/caddy). Construite depuis la racine du dépôt : docker build -f infra/docker/web.Dockerfile .
-FROM node:22.22.2-bookworm-slim@sha256:9f6d5975c7dca860947d3915877f85607946403fc55349f39b4bc3688448bb6e AS build
+FROM node:22.23.3-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS build
 RUN npm install -g pnpm@10.33.0
 WORKDIR /repo
 COPY . .

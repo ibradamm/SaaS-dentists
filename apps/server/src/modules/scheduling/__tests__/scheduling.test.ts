@@ -1,3 +1,4 @@
+import { Settings } from 'luxon';
 import { describe, expect, it } from 'vitest';
 import {
   computeAvailability,
@@ -65,7 +66,24 @@ describe('heure locale et instants', () => {
     }
   });
 
-  it('Casablanca : UTC+1 toute l’année, UTC+0 pendant le ramadan (15 février - 22 mars 2026)', () => {
+  it('heure ambiguë : même instant quel que soit le jour du calcul (été ou hiver)', () => {
+    // Luxon résout une heure ambiguë d'après le décalage du fuseau au moment du calcul.
+    const realNow = Settings.now;
+    try {
+      for (const now of ['2026-01-15T12:00:00Z', '2026-07-15T12:00:00Z']) {
+        Settings.now = () => Date.parse(now);
+        const ambiguous = localDateTimeToInstant('2026-10-25T02:30', PARIS);
+        expect(ambiguous.ok && iso(ambiguous.instant)).toBe('2026-10-25T00:30:00.000Z');
+        expect(iso(wallClockToInstant('2026-10-25', H(2, 30), PARIS))).toBe(
+          '2026-10-25T00:30:00.000Z',
+        );
+      }
+    } finally {
+      Settings.now = realNow;
+    }
+  });
+
+  it('Casablanca : ramadan 2026 (UTC+0 du 15 février au 22 mars), puis UTC+0 permanent depuis le 20 septembre 2026', () => {
     const CASABLANCA = 'Africa/Casablanca';
     expect(iso(wallClockToInstant('2026-01-12', H(9), CASABLANCA))).toBe(
       '2026-01-12T08:00:00.000Z',
@@ -75,6 +93,14 @@ describe('heure locale et instants', () => {
     );
     expect(iso(wallClockToInstant('2026-04-06', H(9), CASABLANCA))).toBe(
       '2026-04-06T08:00:00.000Z',
+    );
+    // Retour à GMT le 20 septembre 2026 (données de fuseau 2026c, Node 22.23.3) : avec des données
+    // plus anciennes, chaque heure saisie par un cabinet marocain serait décalée d'une heure.
+    expect(iso(wallClockToInstant('2026-10-05', H(9), CASABLANCA))).toBe(
+      '2026-10-05T09:00:00.000Z',
+    );
+    expect(iso(wallClockToInstant('2027-04-05', H(9), CASABLANCA))).toBe(
+      '2027-04-05T09:00:00.000Z',
     );
     // Entrée (15 février, 3 h → 2 h) : journée de 25 h, 2 h 30 ambiguë = première occurrence.
     const day = (date: string) =>
@@ -89,8 +115,10 @@ describe('heure locale et instants', () => {
       ok: false,
       code: 'NONEXISTENT',
     });
+    // Retour à GMT (20 septembre) : journée de 25 h.
+    expect(day('2026-09-20')).toBe(25);
     // Une matinée de consultation (8 h - 12 h) dure 4 h de part et d'autre du changement.
-    for (const date of ['2026-02-14', '2026-02-16', '2026-03-21', '2026-03-23']) {
+    for (const date of ['2026-02-14', '2026-02-16', '2026-03-21', '2026-03-23', '2026-09-21']) {
       const start = wallClockToInstant(date, H(8), CASABLANCA);
       expect(hours({ start, end: wallClockToInstant(date, H(12), CASABLANCA) })).toBe(4);
     }

@@ -312,7 +312,7 @@ Seul l'hébergement est à prévoir. Staging Railway (offre Hobby) : environ 5 �
 
 | # | Question | Bloque | Réponse par défaut |
 |---|---|---|---|
-| 1 | Pays des premiers cabinets clients ? | — | **Maroc** (réponse du 2026-09-30) : fuseau `Africa/Casablanca`, dirham, numéros +212 et noms en arabe vérifiés ; cadre juridique (loi 09-08, CNDP) à valider |
+| 1 | Pays des premiers cabinets clients ? | — | **Maroc** (réponse du 2026-09-30) : fuseau `Africa/Casablanca` (UTC+0 depuis le 20 septembre 2026, données de fuseau 2026c de Node 22.23.3), dirham, numéros +212 et noms en arabe vérifiés ; cadre juridique (loi 09-08, CNDP) à valider |
 
 Questions 3 et 4 (chiffre d'affaires, dépenses), réponse du 2026-09-27 : le chiffre d'affaires correspond aux sommes réellement encaissées ; le montant dû se distingue du montant payé ; paiements partiels et restant dû visibles ; pas de dépenses au MVP (ADR 0009).
 

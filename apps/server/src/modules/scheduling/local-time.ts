@@ -53,31 +53,44 @@ export function eachLocalDate(from: string, to: string): string[] {
 }
 
 /**
+ * Première occurrence d'une heure murale ambiguë (retour à l'heure d'hiver). Luxon choisit
+ * l'occurrence d'après le décalage du fuseau au moment du calcul : sans ce choix explicite, la
+ * même saisie donnerait un autre instant selon la saison où elle est faite.
+ */
+function firstOccurrence(dt: DateTime): number {
+  return Math.min(...dt.getPossibleOffsets().map((candidate) => candidate.toMillis()));
+}
+
+/**
  * Instant correspondant à une heure murale : date locale + minutes depuis minuit, dans le
  * fuseau. 1440 désigne le minuit suivant. Une heure qui n'existe pas (saut d'heure du
  * printemps) est décalée en avant, une heure ambiguë (retour à l'heure d'hiver) prend sa
- * première occurrence : comportement de Luxon, vérifié par les tests.
+ * première occurrence.
  */
 export function wallClockToInstant(date: string, minute: number, zone: string): number {
   const day = calendarDate(date);
   if (minute === MINUTES_PER_DAY) {
-    return DateTime.fromObject({ year: day.year, month: day.month, day: day.day }, { zone })
-      .plus({ days: 1 })
-      .toMillis();
+    return firstOccurrence(
+      DateTime.fromObject({ year: day.year, month: day.month, day: day.day }, { zone }).plus({
+        days: 1,
+      }),
+    );
   }
   if (!Number.isInteger(minute) || minute < 0 || minute > MINUTES_PER_DAY) {
     throw new RangeError(`Minute invalide : ${minute}`);
   }
-  return DateTime.fromObject(
-    {
-      year: day.year,
-      month: day.month,
-      day: day.day,
-      hour: Math.floor(minute / 60),
-      minute: minute % 60,
-    },
-    { zone },
-  ).toMillis();
+  return firstOccurrence(
+    DateTime.fromObject(
+      {
+        year: day.year,
+        month: day.month,
+        day: day.day,
+        hour: Math.floor(minute / 60),
+        minute: minute % 60,
+      },
+      { zone },
+    ),
+  );
 }
 
 export type LocalDateTimeResult =
@@ -100,7 +113,7 @@ export function localDateTimeToInstant(value: string, zone: string): LocalDateTi
   );
   if (!result.isValid) return { ok: false, code: 'INVALID' };
   if (result.hour !== hour || result.minute !== minute) return { ok: false, code: 'NONEXISTENT' };
-  return { ok: true, instant: result.toMillis() };
+  return { ok: true, instant: firstOccurrence(result) };
 }
 
 /** Minutes écoulées depuis minuit local (heure murale) pour un instant. */

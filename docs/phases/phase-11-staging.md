@@ -50,7 +50,7 @@
 | Images Docker construites et lancées **en CI** | Premier passage (`253a94f`) : attente sans l'autorité de test (défaut du script). Deuxième (`1ba8218`) : job vert **à tort** — `check:deployment` avait échoué (adresse attendue vide), code masqué par `\| tee`. Corrigé dans `d321c97` ; résultat en section 9 |
 | `check-database` sur la base staging locale | « Base conforme » ; test d'intégration (base conforme, table sans RLS signalée) |
 | `.railway/railway.ts` | Typage contre le SDK officiel `railway` 3.12.0 ; lint. **Jamais planifié ni appliqué** (aucun projet Railway) |
-| Cabinet marocain | Création `Africa/Casablanca`, `fr-MA`, `MAD`, `MA` acceptée ; passages UTC+1 → UTC+0 → UTC+1 du ramadan testés (15 février et 22 mars 2026, données de fuseau 2025c de Node) ; montants en dirhams à deux décimales ; numéros +212 déjà couverts |
+| Cabinet marocain | Création `Africa/Casablanca`, `fr-MA`, `MAD`, `MA` acceptée ; changements d'heure du ramadan 2026 testés (15 février et 22 mars) ; **retour du Maroc à GMT (UTC+0) le 20 septembre 2026** testé (données de fuseau 2026c, Node 22.23.3, voir « Heure légale marocaine » ci-dessous) ; montants en dirhams à deux décimales ; numéros +212 déjà couverts |
 | **Noms en arabe (défaut découvert et corrigé)** | Un nom en caractères arabes ou tifinagh était réduit à un texte vide par la normalisation : patient introuvable par son nom, faux homonymes entre tous les patients arabophones, clé d'identité de l'import réduite à la date de naissance. Corrigé : lettres de tous les alphabets conservées, voyelles brèves, hamza et tatwil ignorées. Tests unitaire, d'intégration et de bout en bout, tous en échec sur l'ancien code |
 | Temps de réponse à travers les deux proxys (pile locale, base presque vide) | Médianes de 7 à 22 ms selon la page. Charge depuis un seul poste : limitée à 300 requêtes par minute, le reste en 429 (voir risques) |
 
@@ -63,6 +63,16 @@
 | `staging:accounts` : droits 600 posés seulement à la création du fichier | `chmod` explicite |
 | Procédure : l'API ne démarre pas tant que le domaine public n'existe pas (`WEB_ORIGIN`) | Redéploiement de l'API après `railway domain`, écrit dans la procédure |
 | Test d'intégration de l'import instable (ordre des contacts sans `ORDER BY`, échec observé une fois sous charge) | Ordre explicite, celui du service |
+
+### Heure légale marocaine et heures ambiguës (défauts découverts le 2026-10-01)
+
+Découverts par la CI de la PR #1, rouge depuis `d321c97` à l'étape des tests ; je ne lisais que les runs « push », verts.
+
+| Constat | Correction | Preuve |
+|---|---|---|
+| **Le Maroc est revenu à GMT (UTC+0) le 20 septembre 2026** ([IANA](https://lists.iana.org/hyperkitty/list/tz@iana.org/message/OICICWYCOLRJSRJWO5O2SU3AADR5GAUJ/), données de fuseau 2026c). L'image de production (Node 22.22.2, données 2025c) le croyait encore à UTC+1 : chaque heure saisie par un cabinet marocain aurait été décalée d'une heure | Node 22.23.3 (données 2026c) épinglé partout : `.nvmrc` (CI), images Docker (empreinte de l'index). Le test Casablanca vérifie l'heure légale actuelle : il échoue avec des données de fuseau antérieures à 2026c | Test en échec sous Node 22.22.2, vert sous 22.23.3 |
+| `.nvmrc` valait `22` : chaque runner prenait une version différente (22.23.2 ou 22.23.3), donc des données de fuseau différentes | Version exacte, identique à celle des images | Échec reproduit en local avec Node 22.23.3 (somme SHA-256 vérifiée) |
+| **Heure ambiguë résolue selon la date du calcul.** Luxon choisit l'occurrence d'après le décalage du fuseau au moment présent : à Paris, « 25 octobre 2026, 2 h 30 » donnait 00:30Z si on le calculait en été, 01:30Z en hiver. Le test de Paris serait devenu rouge le 25 octobre | Première occurrence choisie explicitement (`local-time.ts`, `getPossibleOffsets`) | Nouveau test (calcul « en janvier » et « en juillet »), en échec sur l'ancien code |
 
 ### Résultats de la vérification complète (2026-10-01)
 
@@ -142,7 +152,8 @@ Dans l'ordre (détail et critères : procédure, section 7) :
 - `253a94f` : pile staging locale en échec (défaut du script d'attente).
 - `1ba8218` : pile staging locale verte à tort (voir section 3) ; job Sentry déclenché par erreur (marqueur cité dans le message).
 - `d321c97` : corrections (`pipefail`, passerelle du réseau fixée, `--expect-ip 172.28.0.1`). Tous les jobs verts, Sentry ignoré comme prévu. Journal de la pile staging lu : 10 OK, dont « adresse du poste enregistrée (172.28.0.1) » ; « Aucun échec » ; 182 lignes de journaux sans secret ni jeton.
-- `c7c863e` (noms en arabe, revues) : tous les jobs verts, Sentry ignoré comme prévu. Pile staging locale : 10 OK, « Aucun échec ». Parcours de bout en bout : 56 sur 56 en 4,3 min, dont le parcours des noms en arabe ; contrôle final de 101 978 lignes sans donnée saisie.
+- `c7c863e` (noms en arabe, revues) : runs « push » : tous les jobs verts, Sentry ignoré comme prévu. Pile staging locale : 10 OK, « Aucun échec ». Parcours de bout en bout : 56 sur 56 en 4,3 min, dont le parcours des noms en arabe ; contrôle final de 101 978 lignes sans donnée saisie.
+- Runs « pull_request » (PR #1) de `d321c97`, `c7c863e` et `648797b` : **rouges** à l'étape des tests (Casablanca), non vus sur le moment. Cause et correction : section 3, « Heure légale marocaine ».
 
 ## 10. Risques relevés pendant cette étape
 
@@ -152,7 +163,7 @@ Dans l'ordre (détail et critères : procédure, section 7) :
 | Comportement réel du proxy de Railway (`X-Real-IP` écrasé ? adresses sources ?) | Élevée si faux (contournement de la limitation, journal d'audit faux) | Premier contrôle sur le staging : `check:deployment --rate-limit --expect-ip` |
 | Chiffrement au repos et localisation des sauvegardes Railway non documentés | Moyenne | Trust Center de Railway avant toute production |
 | Aucun rechiffrement outillé de `DATA_ENCRYPTION_KEY` (déjà consigné) | Moyenne en cas de fuite | Commande de rechiffrement avant un premier incident |
-| Données de fuseau des navigateurs anciens (règles marocaines de 2018) | Faible | Postes et navigateurs à jour |
+| **Données de fuseau du navigateur antérieures au retour du Maroc à GMT** : l'interface affiche les heures avec les données du navigateur ; un navigateur qui n'a pas reçu la mise à jour de 2026 afficherait les rendez-vous d'un cabinet marocain une heure trop tard | **Élevée** pour les cabinets marocains | Avant toute production au Maroc : contrôle dans l'interface (décalage du fuseau selon le navigateur comparé à celui du serveur, alerte si différent), puis navigateurs à jour. Versions de navigateur concernées non vérifiées |
 
 ## 11. Cadre marocain (à valider par un juriste ; confiance moyenne)
 
