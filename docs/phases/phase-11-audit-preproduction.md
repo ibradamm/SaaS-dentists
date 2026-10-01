@@ -6,6 +6,32 @@
 
 Un contrôle n'est déclaré conforme qu'avec une preuve exécutée. Les preuves des Phases 9 et 10 sont réutilisées quand le code concerné n'a pas changé. Les tests correspondants ont été réexécutés dans cet audit.
 
+## Mise à jour du 2026-09-30 : préparation du staging, sans hébergement
+
+Le porteur du projet a décidé de rester à 0 € : aucun hébergement payant, aucune suppression de projet. Le staging est préparé et vérifié sur une pile locale et en CI, mais jamais déployé (détail : [phase-11-staging.md](phase-11-staging.md)).
+
+Statut « BLOQUÉ » : **NON VÉRIFIÉ — BLOQUÉ PAR ABSENCE D'HÉBERGEMENT GRATUIT DISPONIBLE**.
+
+| # | Contrôle | Statut au 2026-09-28 | Statut au 2026-09-30 | Nouvelle preuve | Reste à faire sur l'hébergement |
+|---|---|---|---|---|---|
+| 1 | Secrets | PARTIEL | PARTIEL ; BLOQUÉ pour la partie hébergement | Secrets éphémères de la CI masqués et absents des journaux des conteneurs ; `.dockerignore` sans `.env` ; secrets Railway prévus en variables partagées scellées (`.railway/railway.ts`) | Secrets staging distincts de la production, dans le gestionnaire de Railway |
+| 3 | Limitation de l'authentification | PARTIEL | PARTIEL ; BLOQUÉ | Pile locale derrière deux proxys : `X-Forwarded-For` et `X-Real-IP` usurpés sans effet ; deux postes distingués ; faille volontaire (proxy qui n'écrase pas `X-Real-IP`) détectée | `check:deployment --rate-limit --expect-ip` derrière le proxy de Railway |
+| 4 | Isolation et RLS | PARTIEL | PARTIEL ; BLOQUÉ | `check-database` après chaque migration : un déploiement sur une base non conforme échoue | Journal de `migrate` sur le PostgreSQL de Railway ; suite d'intégration sur une base jetable de l'hébergeur |
+| 8 | HTTPS | NON VÉRIFIÉ | BLOQUÉ | Pile locale : TLS 1.3, redirection 308, HSTS ; en CI avec les images de production | `check:deployment` sur le domaine réel |
+| 9 | Sessions | PARTIEL | PARTIEL ; BLOQUÉ | Cookie `__Host-`, `Secure`, `HttpOnly`, `SameSite=Lax` servi au travers de Caddy en `APP_ENV=staging` ; déconnexion effective | Navigateur sur le domaine réel (expiration, changement d'utilisateur ou de cabinet, révocation) |
+| 13 | CORS | PARTIEL | PARTIEL ; BLOQUÉ | Aucune autorisation pour une origine étrangère au travers des deux proxys | Proxy réel |
+| 15 | Journaux | PARTIEL | PARTIEL ; BLOQUÉ ; Sentry NON VÉRIFIÉ | Caddy sans journal d'accès (recherches de patients) ; `terse` contrôlé à chaque déploiement ; journaux des conteneurs contrôlés en CI | Journaux de l'hébergeur ; Sentry (projet et secret GitHub à créer par le porteur du projet) |
+| 16 | Messages d'authentification | PARTIEL (risque accepté) | inchangé | — | — |
+| 19 | E-mails et invitations | PARTIEL | inchangé | — | — |
+| 20 | Sauvegardes | NON VÉRIFIÉ | BLOQUÉ | Procédure et exercice écrits (`docs/operations/sauvegarde-restauration.md`) ; mécanismes de Railway documentés (sauvegardes du volume, restauration à un instant donné sur environ 4 semaines) | Exercice complet, RPO et RTO mesurés |
+| P11 | En-têtes HTTP | NON VÉRIFIÉ | BLOQUÉ | En-têtes servis par le Caddy de production, générés depuis la source unique ; failles volontaires détectées | Domaine réel |
+| P11 | Sentry | NON VÉRIFIÉ | NON VÉRIFIÉ | `sentry-check` dans l'image ; job CI à la demande | Projet `dental-staging`, secret GitHub, événement inspecté |
+| P11 | `DATA_ENCRYPTION_KEY` | PARTIEL | PARTIEL ; BLOQUÉ | Procédure Railway (variable partagée scellée, copie au coffre, empreinte) | Coffre réel, exercice de restauration avec la clé du coffre |
+
+**Défaut découvert et corrigé :** les noms en caractères arabes (ou tifinagh) étaient réduits à un texte vide par la normalisation. Conséquences : patient introuvable par son nom, faux homonymes, clés d'import confondues. Tests unitaire, d'intégration et de bout en bout ajoutés.
+
+**Verdict inchangé : MISE EN PRODUCTION BLOQUÉE.** État du projet : prêt à être déployé, déploiement externe en attente de budget.
+
 ## 0. Environnement constaté
 
 | Élément | Constat (2026-09-28) | Conséquence |

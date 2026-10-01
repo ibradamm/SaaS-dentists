@@ -4,8 +4,6 @@
 #     apps/web/security-headers.ts (security-headers.caddy, produit au build de l'image).
 # Aucun journal d'accès : les adresses contiennent des recherches de patients (?q=…).
 
-encode zstd gzip
-
 handle /api/* {
 	reverse_proxy {$API_UPSTREAM} {
 		# Une seule adresse, calculée par Caddy à partir des proxys de confiance (Caddyfile) :
@@ -16,6 +14,9 @@ handle /api/* {
 }
 
 handle {
+	# Compression des seuls fichiers de l'interface : les réponses de l'API, qui portent le
+	# jeton CSRF, restent non compressées (comme sans proxy).
+	encode zstd gzip
 	import security-headers.caddy
 	root * {$WEB_ROOT:/srv}
 	# Fichiers du build nommés par leur empreinte : cache long. index.html : toujours revalidé,

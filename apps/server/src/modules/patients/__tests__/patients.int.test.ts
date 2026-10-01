@@ -180,6 +180,32 @@ describe('dossier patient', () => {
     );
   });
 
+  it('noms en arabe : recherche avec ou sans voyelles, aucun faux doublon entre patients', async () => {
+    const mohammed = await newPatient({
+      lastName: 'بنعلي',
+      firstName: 'مُحَمَّد',
+      birthDate: '1982-03-04',
+      contacts: [],
+    });
+    const fatima = await newPatient({
+      lastName: 'العلوي',
+      firstName: 'فاطمة',
+      birthDate: '1982-03-04',
+      contacts: [],
+    });
+    const ids = async (q: string) =>
+      (await service.list(secretary, { q })).patients.map((x) => x.id);
+    expect(await ids('بنعلي محمد')).toEqual([mohammed.id]);
+    expect(await ids('العلوي')).toEqual([fatima.id]);
+    // Même date de naissance, autres noms : pas un doublon (auparavant : noms vides, égaux).
+    const duplicates = await service.duplicates(secretary, {
+      lastName: 'العلوي',
+      firstName: 'فاطمة',
+      birthDate: '1982-03-04',
+    });
+    expect(duplicates.map((x) => x.id)).toEqual([fatima.id]);
+  });
+
   it('doublons possibles : même nom et même date, ou date inconnue', async () => {
     const p = await newPatient({ lastName: 'Doublon', firstName: 'Paul', birthDate: '1990-01-01' });
     const found = await service.duplicates(secretary, {

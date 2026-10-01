@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { api, createPatient, nav, setupClinic, signIn, type Clinic } from '../support/app';
 import { todayIn } from '../support/dates';
 import { sql } from '../support/db';
-import { PATIENTS } from '../support/sentinels';
+import { ARABIC_PATIENTS, PATIENTS } from '../support/sentinels';
 
 /*
  * Fiches patients et reprise de l'ancien logiciel : doublons signalés, double envoi, réponse
@@ -48,6 +48,23 @@ test('homonyme signalé avant la création ; « Créer quand même » crée une 
     secretary.getByRole('heading', { name: `${last.toUpperCase()} ${first}` }),
   ).toBeVisible();
   expect(await patientsNamed(last)).toHaveLength(2);
+});
+
+test('noms en arabe : aucun faux homonyme, fiche retrouvée sans les voyelles (bug corrigé en Phase 11)', async () => {
+  const [last, first] = ARABIC_PATIENTS.a;
+  const [otherLast, otherFirst] = ARABIC_PATIENTS.b;
+  await createPatient(clinic.adminPage, otherLast, otherFirst);
+  // Auparavant, tout nom en arabe était réduit à un texte vide : l'autre fiche en arabe était
+  // présentée comme un homonyme, et aucune recherche par le nom ne la trouvait.
+  await fillNewPatient(secretary, last, first);
+  await secretary.getByRole('button', { name: 'Créer la fiche' }).click();
+  await expect(secretary.getByRole('heading', { name: `${last} ${first}` })).toBeVisible();
+  expect(await patientsNamed(last)).toHaveLength(1);
+  await secretary.goto('/patients');
+  await secretary.getByRole('searchbox', { name: /^Rechercher \(nom/ }).fill('بنعلي محمد');
+  const list = secretary.getByRole('list', { name: 'Liste des patients' });
+  await expect(list.getByRole('link', { name: `${last} ${first}` })).toBeVisible();
+  await expect(list.getByRole('link')).toHaveCount(1);
 });
 
 test('double clic sur « Créer la fiche » : une seule fiche (bug corrigé en Phase 10)', async () => {

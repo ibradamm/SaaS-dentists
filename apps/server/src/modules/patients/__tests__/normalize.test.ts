@@ -14,6 +14,22 @@ describe('normalisation', () => {
     expect(normalizeForSearch("  Élodie  D'Almeida-Côté ")).toBe('elodie d almeida cote');
   });
 
+  it('texte de recherche : noms en arabe et en tifinagh conservés (cabinets marocains)', () => {
+    expect(normalizeForSearch('بنعلي')).toBe('بنعلي');
+    // Voyelles brèves, hamza, madda et allongement (tatwil) sans effet sur la comparaison.
+    expect(normalizeForSearch('مُحَمَّد')).toBe('محمد');
+    expect(normalizeForSearch('محمـــد')).toBe('محمد');
+    expect(normalizeForSearch('أحمد')).toBe('احمد');
+    expect(normalizeForSearch('آمنة')).toBe('امنة');
+    expect(normalizeForSearch('ⴰⵎⴰⵣⵉⵖ')).toBe('ⴰⵎⴰⵣⵉⵖ');
+    expect(normalizeForSearch('Ñúñez Çağlar')).toBe('nunez caglar');
+    // Deux patients distincts ne partagent plus une clé vide.
+    expect(identityKey('بنعلي', 'محمد', '1980-01-01')).not.toBe(
+      identityKey('العلوي', 'فاطمة', '1980-01-01'),
+    );
+    expect(identityKey('بنعلي', 'مُحَمَّد', null)).toBe(identityKey('بنعلي', 'محمد', null));
+  });
+
   it.each([
     ['06 12 34 56 78', 'FR', '+33612345678'],
     ['0612345678', 'FR', '+33612345678'],

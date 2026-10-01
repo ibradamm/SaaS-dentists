@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { ImportRowInput } from '@dental/shared';
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { actorFor } from '../../../../test/actors';
 import { META, createUser, testClock } from '../../../../test/auth';
@@ -109,7 +109,12 @@ describe('import de patients (fichiers CSV / Excel)', () => {
       version: 1,
     });
     const contacts = await withTenant(t.appDb, clinic.id, (tx) =>
-      tx.select().from(patientContacts).where(eq(patientContacts.patientId, bernard.id)),
+      // Ordre explicite (celui du service) : sans ORDER BY, PostgreSQL ne garantit aucun ordre.
+      tx
+        .select()
+        .from(patientContacts)
+        .where(eq(patientContacts.patientId, bernard.id))
+        .orderBy(desc(patientContacts.isPrimary), asc(patientContacts.createdAt)),
     );
     expect(contacts.map((c) => [c.phoneE164, c.isPrimary])).toEqual([
       ['+33611223344', true],

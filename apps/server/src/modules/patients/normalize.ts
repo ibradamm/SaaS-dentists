@@ -2,13 +2,18 @@ import type { DateFormat } from '@dental/shared';
 import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js/max';
 import { z } from 'zod';
 
-/** Texte comparable : minuscules, sans accents ni ponctuation, espaces simples. */
+/**
+ * Texte comparable : minuscules, sans accents ni ponctuation, espaces simples. Lettres de tous
+ * les alphabets conservées (noms en arabe ou en tifinagh au Maroc) ; marques combinantes
+ * (accents, voyelles brèves et hamza arabes) et allongement arabe (tatwil) retirés.
+ */
 export function normalizeForSearch(value: string): string {
   return value
     .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
+    .replace(/\p{M}/gu, '')
+    .replace(/\u0640/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
 }
 

@@ -107,7 +107,7 @@ Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, 
 ### A.6 Environnements
 - `APP_ENV` ∈ `development`, `test`, `staging`, `production` ; configuration validée au démarrage.
 - **Tests :** base jetable à chaque exécution ; parcours de bout en bout sur une base `dental_e2e` recréée, avec les migrations, l'API, le worker et l'interface compilés (ADR 0012).
-- **Staging :** jamais de données patients réelles.
+- **Staging :** jamais de données patients réelles ; prêt, non déployé (aucun budget accordé) : `docs/operations/deploiement-staging.md`. Pile staging locale en HTTPS exécutée en CI (`infra/staging-local`).
 
 ---
 
@@ -129,7 +129,7 @@ Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, 
 | Graphiques | Écrits à la main (HTML et CSS) | Colonnes, barres et jauges simples : une bibliothèque ajouterait plusieurs dizaines de ko (ADR 0010) |
 | Tests | Vitest, Testing Library, Playwright 1.56 (Chromium) et axe-core : parcours de bout en bout sur la pile de production (ADR 0012) | |
 | Qualité | ESLint (règles de frontières), Prettier, gitleaks, `pnpm audit` en CI, budget du chargement initial de l'interface (`pnpm check:bundle`) | |
-| Déploiement (Phase 11) | Conteneurs, Caddy (TLS automatique), PostgreSQL managé avec restauration à un instant donné | |
+| Déploiement (Phase 11) | Images Docker (serveur, interface avec Caddy), proxy de l'hébergeur pour TLS, PostgreSQL managé avec restauration à un instant donné ; staging Railway décrit en Infrastructure as Code (`.railway/railway.ts`), non déployé | ADR 0013 |
 
 ---
 
@@ -236,7 +236,8 @@ Double authentification obligatoire pour ADMIN et DENTIST.
 | Secrets | Variables d'environnement et gestionnaire de secrets ; gitleaks en CI ; `.env` exclu de Git |
 | Interface | Pages chargées à la demande ; cache des requêtes vidé à tout changement de session (compte, cabinet, expiration) et retour à la connexion sur une réponse 401 (ADR 0008) ; en-têtes de sécurité définis dans `apps/web/security-headers.ts` (CSP stricte sans `unsafe-inline` ni `unsafe-eval`, vérifiée sur toutes les pages par les parcours) ; aucun secret dans le build (`check:bundle`) |
 | Logs et audit | Aucune donnée patient dans les logs (chemin des requêtes sans chaîne de requête, corps masqués, erreurs par liste blanche) ; l'audit ne recopie pas les valeurs modifiées (noms de champs seulement) ; catalogue fermé des actions ; journal du serveur PostgreSQL sans valeurs en conflit (`log_error_verbosity = terse`, posé par le bootstrap) |
-| Sauvegardes | PostgreSQL managé avec restauration à un instant donné ; test de restauration documenté (Phase 11) |
+| Sauvegardes | PostgreSQL managé avec restauration à un instant donné ; procédure et exercice : `docs/operations/sauvegarde-restauration.md` (non exécutés sur un hébergement) |
+| Déploiement | Invariants de la base (RLS forcée, rôles, journal `terse`) vérifiés à chaque déploiement (`check-database`) ; adresse du client transmise par Caddy depuis les seuls proxys de confiance ; une seule API (ADR 0013) |
 
 ### G.2 Durées de conservation (proposition technique, à valider juridiquement)
 
@@ -268,7 +269,7 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | 8 | Tableau de bord et statistiques : indicateurs du jour sur l'accueil, page « Statistiques » par période et praticien, calculs en base dans le fuseau du cabinet (ADR 0010) | 15, 16 | Fait |
 | 9 | Journal d'audit consultable et revue de sécurité : page « Journal », matrice de toutes les routes, fuite entre cabinets, tentatives simultanées, journaux sans donnée patient, remontée des erreurs, conservation (ADR 0011) | 17, 18 | Fait |
 | 10 | Tests complets et validation globale : parcours de bout en bout sur la pile de production en CI (trois rôles, concurrence, réseau, changement d'heure, isolation, accessibilité, responsive), charge, restauration, démonstration (ADR 0012, `docs/demo.md`) | 19 | Fait |
-| 11 | Déploiement : hébergement, secrets, sauvegardes, supervision, procédures. Audit de sécurité pré-production (gate bloquant) : `docs/phases/phase-11-audit-preproduction.md` | 20 | En cours : mise en production bloquée (hébergement à choisir, vérifications staging) |
+| 11 | Déploiement : hébergement, secrets, sauvegardes, supervision, procédures. Audit de sécurité pré-production (gate bloquant) : `docs/phases/phase-11-audit-preproduction.md` ; préparation du staging : `docs/phases/phase-11-staging.md` | 20 | En cours : prêt à être déployé, déploiement externe en attente de budget ; mise en production bloquée |
 
 ---
 
@@ -277,7 +278,7 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 **Aucun service payant n'est requis par le périmètre actuel.** Les seules dépendances sont :
 - les paquets npm, sous licence MIT ou Apache-2.0, vérifiés à l'installation et audités en CI ;
 - Sentry, **facultatif** (remontée des erreurs, sans SDK ni donnée saisie, ADR 0011) : désactivé sans `SENTRY_DSN`, offre gratuite suffisante au MVP ;
-- l'hébergeur (Phase 11). Si le cabinet est en France, un hébergement certifié HDS est obligatoire pour des données de santé.
+- l'hébergeur (Phase 11). Premiers cabinets au Maroc (réponse du 2026-09-30) : loi 09-08 et CNDP (données de santé, transfert hors du Maroc) à valider juridiquement ; la certification HDS ne s'impose qu'aux données de patients en France.
 
 ---
 
@@ -295,6 +296,7 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 | Non-conformité données de santé | Minimisation, hébergement adapté, avis juridique avant la production |
 | Dérive du périmètre | Périmètre explicite (section 0, ADR 0004) |
 | Limitation de débit en mémoire | Suffisante pour une seule instance ; stockage partagé si plusieurs instances (Phase 11) |
+| Limitation par adresse IP partagée (tous les postes d'un cabinet derrière une seule adresse) | Limite globale réglable (`API_RATE_LIMIT_PER_MINUTE`) ; à mesurer sur le staging avec `staging:timings` |
 | Essais de mots de passe ou de codes en parallèle | Une tentative à la fois par adresse, 10 échecs (mots de passe et codes) puis 15 minutes de verrouillage ; tests de concurrence (ADR 0011) |
 | Donnée patient dans un journal ou chez Sentry | Sérialisation des erreurs et événements Sentry par liste blanche ; tests sur erreurs réelles et parcours complet (ADR 0011) |
 
@@ -302,7 +304,7 @@ L'ordre suit les priorités fixées le 2026-09-26. Les disponibilités passent a
 
 ## K. Coûts
 
-Seul l'hébergement est à prévoir, pour environ 30 à 150 € par mois selon le fournisseur (haut de fourchette pour un hébergement HDS), plus un nom de domaine. Aucun coût par message ni par appel d'IA dans le périmètre actuel.
+Seul l'hébergement est à prévoir. Staging Railway (offre Hobby) : environ 5 à 7 $ par mois (estimation, `docs/operations/deploiement-staging.md`). Production : à chiffrer avec les volumes réels (offre Pro à partir de 20 $ par mois), plus un nom de domaine. Aucun coût par message ni par appel d'IA dans le périmètre actuel.
 
 ---
 
@@ -310,7 +312,7 @@ Seul l'hébergement est à prévoir, pour environ 30 à 150 € par mois selon l
 
 | # | Question | Bloque | Réponse par défaut |
 |---|---|---|---|
-| 1 | Pays des premiers cabinets clients ? | Phase 11 (production) | Aucune : hébergement, conservation et obligations en dépendent |
+| 1 | Pays des premiers cabinets clients ? | — | **Maroc** (réponse du 2026-09-30) : fuseau `Africa/Casablanca`, dirham, numéros +212 et noms en arabe vérifiés ; cadre juridique (loi 09-08, CNDP) à valider |
 
 Questions 3 et 4 (chiffre d'affaires, dépenses), réponse du 2026-09-27 : le chiffre d'affaires correspond aux sommes réellement encaissées ; le montant dû se distingue du montant payé ; paiements partiels et restant dû visibles ; pas de dépenses au MVP (ADR 0009).
 

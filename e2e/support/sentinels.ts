@@ -11,6 +11,11 @@ export const PATIENTS = {
   f: ['Fabregas', 'Noé'],
   g: ['Guillemot', 'Rose'],
 } as const;
+/** Cabinets marocains : noms en arabe (voyelles brèves sur le premier prénom). */
+export const ARABIC_PATIENTS = {
+  a: ['بنعلي', 'مُحَمَّد'],
+  b: ['العلوي', 'فاطمة'],
+} as const;
 export const MEDICAL_NOTE = 'Allergie à la pénicilline (note e2e)';
 export const ADMIN_NOTE = 'Préfère les rendez-vous du matin (note e2e)';
 export const PHONE_DIGITS = '612345678';
@@ -25,6 +30,7 @@ export const TYPED_REASONS = [
 
 export const FORBIDDEN_IN_LOGS = [
   ...Object.values(PATIENTS).flat(),
+  ...Object.values(ARABIC_PATIENTS).flat(),
   MEDICAL_NOTE,
   ADMIN_NOTE,
   'phrase secrète de test e2e',

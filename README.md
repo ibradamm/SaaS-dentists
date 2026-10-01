@@ -71,7 +71,13 @@ pnpm e2e                  # build de production, puis les 52 parcours (environ 5
 pnpm --filter @dental/e2e exec playwright show-report artifacts/report
 ```
 
-Vérification d'un environnement hébergé (staging, puis production), par de vraies requêtes HTTP : `pnpm --filter @dental/e2e check:deployment --url https://… [--email compte-de-test --rate-limit]` (mot de passe dans `CHECK_PASSWORD`). Audit pré-production et état de chaque contrôle : `docs/phases/phase-11-audit-preproduction.md`.
+Vérification d'un environnement hébergé (staging, puis production), par de vraies requêtes HTTP : `pnpm --filter @dental/e2e check:deployment --url https://… --accounts comptes.json --rate-limit --expect-ip <adresse du poste>` (comptes synthétiques créés par `staging:accounts`). Audit pré-production et état de chaque contrôle : `docs/phases/phase-11-audit-preproduction.md`.
+
+## Déploiement
+
+- Images : `infra/docker/` (serveur, interface avec Caddy). Pile staging locale en HTTPS, exécutée en CI : `infra/staging-local/compose.yml`.
+- Staging Railway (Infrastructure as Code) : `.railway/railway.ts`. Procédure, coûts et vérifications : `docs/operations/deploiement-staging.md`. Sauvegardes : `docs/operations/sauvegarde-restauration.md`. Décisions : ADR 0013.
+- **État : prêt, non déployé** (aucun budget d'hébergement accordé).
 
 - La pile est démarrée par Playwright :
   - base `dental_e2e` recréée ;

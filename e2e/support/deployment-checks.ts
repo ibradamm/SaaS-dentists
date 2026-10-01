@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import tls from 'node:tls';
 import { SECURITY_HEADERS } from '../../apps/web/security-headers';
+import { httpSession } from './http-session';
 
 /*
  * Vérifications d'un déploiement réel (staging, puis production) par de vraies requêtes HTTP :
@@ -235,25 +236,17 @@ export async function runDeploymentChecks(options: DeploymentCheckOptions): Prom
     if (!secretaryId) return ['ÉCHEC', 'connexion de la secrétaire absente (contrôle précédent)'];
     // La connexion de la secrétaire (contrôle précédent) est tracée avec l'adresse vue par
     // l'API : celle du poste, jamais celle d'un proxy de l'hébergeur ou de Caddy.
-    const json = { 'content-type': 'application/json' };
-    const login = await fetch(at('/api/auth/login'), {
-      method: 'POST',
-      headers: json,
-      body: JSON.stringify({ email: options.admin.email, password: options.admin.password }),
-    });
-    const pair = login.headers
-      .getSetCookie()
-      .find((c) => /dental_session=/.test(c))
-      ?.split(';')[0];
-    const { csrfToken } = (await login.json().catch(() => ({}))) as { csrfToken?: string };
-    if (!pair) return ['ÉCHEC', `connexion de l'administrateur : ${login.status}`];
-    const verify = await fetch(at('/api/auth/mfa/verify'), {
-      method: 'POST',
-      headers: { ...json, cookie: pair, 'x-csrf-token': csrfToken ?? '', origin: base.origin },
-      body: JSON.stringify({ code: await options.admin.code() }),
-    });
-    const session = verify.headers.getSetCookie().find((c) => /dental_session=/.test(c));
-    const cookie = session?.split(';')[0] ?? pair;
+    const admin = httpSession(base);
+    const { email, password } = options.admin;
+    await admin('POST', '/api/auth/login', { email, password });
+    try {
+      await admin('POST', '/api/auth/mfa/verify', { code: await options.admin.code() });
+    } catch {
+      return [
+        'ÉCHEC',
+        'code de double authentification refusé (usage unique : relancer après 30 s)',
+      ];
+    }
     const day = (offset: number) => new Date(Date.now() + offset).toISOString().slice(0, 10);
     const query = new URLSearchParams({
       from: day(-86_400_000),
@@ -262,23 +255,13 @@ export async function runDeploymentChecks(options: DeploymentCheckOptions): Prom
       action: 'auth.login_succeeded',
       limit: '1',
     });
-    const res = await fetch(at(`/api/audit-logs?${query}`), { headers: { cookie } });
-    const body = (await res.json().catch(() => ({}))) as { entries?: { ip: string | null }[] };
-    const { csrfToken: after } = (await verify.json().catch(() => ({}))) as { csrfToken?: string };
-    await fetch(at('/api/auth/logout'), {
-      method: 'POST',
-      headers: { cookie, 'x-csrf-token': after ?? '', origin: base.origin },
-    });
-    const ip = body.entries?.[0]?.ip;
-    if (verify.status === 401) {
-      return [
-        'ÉCHEC',
-        'code de double authentification refusé (usage unique : relancer après 30 s)',
-      ];
-    }
-    if (verify.status !== 200 || res.status !== 200 || !ip) {
-      return ['ÉCHEC', `journal illisible (code ${verify.status}, journal ${res.status})`];
-    }
+    const { entries } = await admin<{ entries: { ip: string | null }[] }>(
+      'GET',
+      `/api/audit-logs?${query}`,
+    );
+    await admin('POST', '/api/auth/logout');
+    const ip = entries[0]?.ip;
+    if (!ip) return ['ÉCHEC', 'connexion de la secrétaire absente du journal'];
     if (options.local) return ['OK', `pile locale : ${ip}`];
     if (options.expectIp) {
       return ip === options.expectIp

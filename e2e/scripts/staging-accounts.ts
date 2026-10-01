@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { chmodSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { generate } from 'otplib';
 import { httpSession, type HttpSession } from '../support/http-session';
@@ -85,4 +85,5 @@ writeFileSync(
   ),
   { mode: 0o600 },
 );
+chmodSync(values.out, 0o600); // fichier déjà existant : droits restreints quand même
 console.log(`Comptes de test prêts (administrateur et secrétaire) : ${values.out}`);

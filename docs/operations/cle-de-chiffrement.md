@@ -55,7 +55,9 @@ Ce scénario est vérifié à chaque exécution des parcours de bout en bout, su
 - **Clé conservée :** une note médicale créée par l'application, lue dans une base restaurée depuis `pg_dump`, se déchiffre avec la clé conservée à part.
 - **Autre clé :** le déchiffrement échoue. Le chiffrement est authentifié : aucune donnée n'est rendue fausse en silence.
 
-**Reste à faire en Phase 11 :** le même exercice sur l'hébergement réel, avec la clé tirée du coffre de sauvegarde et non de l'environnement de test.
+**Reste à faire en Phase 11 :** le même exercice sur l'hébergement réel, avec la clé tirée du coffre de sauvegarde et non de l'environnement de test (`docs/operations/sauvegarde-restauration.md`, étape 7).
+
+**Sur Railway** (`docs/operations/deploiement-staging.md`) : variable partagée `DATA_ENCRYPTION_KEY` de l'environnement, **scellée** (plus lisible par personne après enregistrement), référencée par l'API et le worker seulement. La copie du coffre et l'empreinte du registre restent le seul moyen de la relire.
 
 ## Perte de la clé
 
