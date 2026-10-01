@@ -136,6 +136,7 @@ Les commandes d'administration affichent un mot de passe temporaire : les exécu
 | 6 | Suite d'intégration sur un PostgreSQL de l'hébergeur | Service `pg-test` jetable (modèle PostgreSQL), proxy TCP le temps du test, `TEST_DATABASE_ADMIN_URL=… pnpm --filter @dental/server test`, puis suppression de `pg-test` | Tous les tests verts |
 | 7 | Sauvegarde et restauration | [sauvegarde-restauration.md](sauvegarde-restauration.md) | Données, rendez-vous, paiements, migrations, RLS, rôles, droits, audit et note médicale relue avec la clé du coffre |
 | 8 | Performances | `pnpm --filter @dental/e2e staging:timings --url https://<domaine> --accounts ~/comptes-staging.json`, d'abord avec les limites normales (nombre de 429), puis `API_RATE_LIMIT_PER_MINUTE` relevé le temps de la mesure de charge et remis ensuite | Comparer aux mesures locales (docs/phases/phase-11-staging.md) ; aucune erreur serveur |
+| 9 | Fin de contrat | [fin-de-contrat.md](fin-de-contrat.md) avec un cabinet fictif : suspension, export par `railway ssh`, purge simulée puis exécutée ; restauration d'une sauvegarde antérieure, puis rejeu de la purge | Export complet ; cabinet absent après la purge et après le rejeu |
 
 Tant qu'une ligne n'est pas verte, le contrôle correspondant de `docs/phases/phase-11-audit-preproduction.md` reste NON VÉRIFIÉ.
 

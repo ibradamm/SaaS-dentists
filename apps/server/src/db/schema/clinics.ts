@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { char, check, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
+import { char, check, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { createdAt, primaryId, updatedAt } from './_columns';
 
 export const CLINIC_STATUSES = ['ACTIVE', 'SUSPENDED'] as const;
@@ -15,6 +15,9 @@ export const clinics = pgTable(
     currency: char('currency', { length: 3 }).notNull(),
     countryCode: char('country_code', { length: 2 }).notNull(),
     status: text('status', { enum: CLINIC_STATUSES }).notNull().default('ACTIVE'),
+    // Conservation pour litige (docs/adr/0014) : tant qu'elle est posée, aucune suppression
+    // (purge nocturne, purge après résiliation) ne touche les données du cabinet.
+    legalHoldSince: timestamp('legal_hold_since', { withTimezone: true }),
     // Paramètres du cabinet, validés par un schéma Zod à la lecture et à l'écriture.
     settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
     // Coordonnées (facultatives) ; téléphone au format E.164.

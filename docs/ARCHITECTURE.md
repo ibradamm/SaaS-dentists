@@ -130,6 +130,7 @@ Les contrats d'entrée et de sortie sont des schémas Zod de `packages/shared`, 
 | Tests | Vitest, Testing Library, Playwright 1.56 (Chromium) et axe-core : parcours de bout en bout sur la pile de production (ADR 0012) | |
 | Qualité | ESLint (règles de frontières), Prettier, gitleaks, `pnpm audit` en CI, budget du chargement initial de l'interface (`pnpm check:bundle`) | |
 | Déploiement (Phase 11) | Images Docker (serveur, interface avec Caddy), proxy de l'hébergeur pour TLS, PostgreSQL managé avec restauration à un instant donné ; staging Railway décrit en Infrastructure as Code (`.railway/railway.ts`), non déployé | ADR 0013 |
+| Fin de contrat et conservation | Catalogue des tables d'un cabinet ; export de restitution, suspension, conservation pour litige, purge sur instruction ; durées non validées mesurées sans suppression (`docs/conformite/`) | ADR 0014 |
 
 ---
 
@@ -241,13 +242,16 @@ Double authentification obligatoire pour ADMIN et DENTIST.
 
 ### G.2 Durées de conservation (proposition technique, à valider juridiquement)
 
+Tableau détaillé et à jour (durées, points de départ, justifications, statuts) : `docs/conformite/tableau-de-conservation.md` ; aucune suppression automatique sur une durée non validée (ADR 0014). Résumé :
+
 | Donnée | Proposition |
 |---|---|
-| Lignes d'import (données personnelles) | Effacées à la validation ou à l'abandon du lot ; brouillons abandonnés effacés après 24 h (tâche nocturne, ADR 0011) |
+| Lignes d'import (données personnelles) | Copie effacée à la validation ou à l'abandon du lot ; brouillons abandonnés effacés après 24 h (tâche nocturne, ADR 0011). Restent, pour un lot validé, la clé d'identité et la référence externe (écart E9, à décider) |
 | Sessions terminées | 30 jours après leur fin (validé pour le MVP), puis supprimées par la tâche nocturne. Politique configurable (`SESSION_RETENTION_DAYS`, 30 à 3 650 jours) à revoir après avis juridique ; plancher de 30 jours dans la politique RLS (ADR 0011) |
-| Journaux applicatifs | 30 jours |
+| Journaux applicatifs | 30 jours (proposition) ; durée réelle chez l'hébergeur non vérifiée |
 | `audit_logs` | À fixer avec un juriste (souvent plusieurs années) |
-| Paiements | Durée légale comptable du pays |
+| Paiements | Maroc : article 211 du CGI (dix ans pour les pièces comptables du cabinet), portée et point de départ à confirmer |
+| Données d'un cabinet après résiliation | Restitution (`export-clinic`), puis purge sur instruction (`purge-clinic`) au terme fixé par le contrat ; conservation pour litige possible (ADR 0014) |
 | Patients inactifs | Archivage ; effacement selon la règle retenue après avis juridique (conflit avec la conservation du dossier médical, ADR 0011) |
 
 ---

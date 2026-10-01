@@ -57,7 +57,7 @@ const staleVersion = () =>
     "La fiche a été modifiée par quelqu'un d'autre entre-temps. Rechargez-la.",
     409,
   );
-const noteContext = (noteId: string) => `patient_medical_notes:${noteId}`;
+export const noteContext = (noteId: string) => `patient_medical_notes:${noteId}`;
 
 // Résumé d'une fiche, à lire avec la jointure `primaryContact`. Jointure plutôt que sous-requête :
 // dans une requête sur une seule table, Drizzle écrit les colonnes sans préfixe de table, et une

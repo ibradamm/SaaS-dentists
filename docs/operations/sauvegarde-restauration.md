@@ -51,7 +51,9 @@ Préparation : comptes de test ([deploiement-staging.md](deploiement-staging.md)
 6. **Bascule du staging vers la base restaurée**, sans toucher à l'original :
    - dans `.railway/railway.ts`, remplacer `postgres(...)` par le nom du service restauré, dans les références ;
    - `railway config plan`, puis `railway config apply` ;
-   - redéployer `migrate` (« Base conforme »), puis `api` et `worker`. Noter la fin (API en bonne santé).
+   - redéployer `migrate` (« Base conforme ») ;
+   - **avant `api` et `worker`** : rejouer les purges de cabinets inscrites au registre après la date de la sauvegarde ([fin-de-contrat.md](fin-de-contrat.md), section 4). Sinon un cabinet supprimé réapparaît ;
+   - redéployer `api` et `worker`. Noter la fin (API en bonne santé).
 7. **Clé tirée du coffre** : remplacer la valeur de `DATA_ENCRYPTION_KEY` par la copie du coffre, et comparer son empreinte avec celle du registre.
 8. **Vérifications**, toutes obligatoires :
    - patient « Restauration Alpha » intact, « Restauration Bêta » absent ;

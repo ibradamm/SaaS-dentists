@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createUser } from '../../../test/auth';
 import { createTestClinic, openTestDatabase } from '../../../test/db';
 import { createLogger } from '../../config/logger';
+import { setLegalHold } from '../../db/admin/clinics';
 import type { Clinic } from '../../db/schema';
 import { SECURITY_POLICY as P } from '../../modules/auth/security-policy';
 import { registerJobHandlers } from '../handlers';
@@ -206,5 +207,21 @@ describe('conservation des données : tâche quotidienne', () => {
     } finally {
       await boss.stop({ graceful: false });
     }
+  });
+
+  it('conservation pour litige : rien n’est supprimé dans ce cabinet tant qu’elle est posée', async () => {
+    const logger = createLogger({ service: 'worker', env: 'test', level: 'silent' });
+    const held = await createTestClinic(t.ownerDb);
+    const user = (await createUser(t.ownerDb, held.id, 'ADMIN')).id;
+    const old = await session(held.id, user, { seen: ago(40 * DAY) });
+    const stale = await draft(held.id, user, ago(2 * DAY));
+    await setLegalHold(t.ownerDb, held.id, true);
+    expect((await runRetention({ db: t.appDb, logger })).legalHolds).toBeGreaterThanOrEqual(1);
+    expect(await exists(held.id, 'sessions', old)).toBe(true);
+    expect(await exists(held.id, 'import_batches', stale)).toBe(true);
+    // Levée : la purge suivante s'applique normalement.
+    await setLegalHold(t.ownerDb, held.id, false);
+    await runRetention({ db: t.appDb, logger });
+    expect(await exists(held.id, 'sessions', old)).toBe(false);
   });
 });

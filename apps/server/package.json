@@ -16,6 +16,10 @@
     "admin:create-clinic": "tsx --env-file-if-exists=../../.env src/db/cli/create-clinic.ts",
     "admin:create-admin": "tsx --env-file-if-exists=../../.env src/db/cli/create-admin.ts",
     "admin:reset-mfa": "tsx --env-file-if-exists=../../.env src/db/cli/reset-mfa.ts",
+    "admin:clinic-lifecycle": "tsx --env-file-if-exists=../../.env src/db/cli/clinic-lifecycle.ts",
+    "admin:export-clinic": "tsx --env-file-if-exists=../../.env src/db/cli/export-clinic.ts",
+    "admin:purge-clinic": "tsx --env-file-if-exists=../../.env src/db/cli/purge-clinic.ts",
+    "admin:retention-report": "tsx --env-file-if-exists=../../.env src/db/cli/retention-report.ts",
     "sentry:check": "tsx --env-file-if-exists=../../.env src/cli/sentry-check.ts"
   },
   "dependencies": {

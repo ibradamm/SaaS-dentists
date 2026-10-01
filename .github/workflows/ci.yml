@@ -158,6 +158,21 @@ jobs:
           # Poste vu par le proxy de périmètre : passerelle du réseau de la pile (compose.yml).
           pnpm --filter @dental/e2e check:deployment --url https://localhost --accounts "$RUNNER_TEMP/accounts.json" --rate-limit --expect-ip 172.28.0.1 | tee "$RUNNER_TEMP/check.txt"
           if grep -q '^IGNORÉ' "$RUNNER_TEMP/check.txt"; then echo "::error::contrôle ignoré"; exit 1; fi
+      - name: Fin de contrat avec les commandes de production (export, revue, suspension, purge)
+        # docs/operations/fin-de-contrat.md. L'export (données fictives) reste dans un fichier
+        # du runner, jamais dans le journal du job.
+        shell: bash
+        run: |
+          name="Cabinet Test Résiliation"
+          clinic=$($COMPOSE run --rm --no-deps -T migrate node dist/create-clinic.js --name "$name" --timezone Africa/Casablanca --locale fr-MA --currency MAD --country MA | sed -n 's/Cabinet créé : //p')
+          $COMPOSE run --rm --no-deps -T api node dist/export-clinic.js --clinic "$clinic" --out - > "$RUNNER_TEMP/export.json"
+          node -e "const e = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); if (e.format !== 'dental-export/1' || e.counts.clinics !== 1) process.exit(1)" "$RUNNER_TEMP/export.json"
+          $COMPOSE run --rm --no-deps -T api node dist/retention-report.js | grep -q 'Aucune suppression'
+          purge() { $COMPOSE run --rm --no-deps -T bootstrap node dist/purge-clinic.js --clinic "$clinic" --confirm "$name" "$@"; }
+          if purge --execute; then echo "::error::purge acceptée pour un cabinet actif"; exit 1; fi
+          $COMPOSE run --rm --no-deps -T migrate node dist/clinic-lifecycle.js --clinic "$clinic" --action suspend
+          purge --execute
+          if purge; then echo "::error::cabinet encore présent après la purge"; exit 1; fi
       - name: Journaux des conteneurs sans secret ni jeton
         run: |
           $COMPOSE logs --no-color > "$RUNNER_TEMP/logs.txt"

@@ -148,6 +148,13 @@
       "when": 1790614719234,
       "tag": "0020_payments_clinic_charge_index",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790856364341,
+      "tag": "0021_clinic_legal_hold",
+      "breakpoints": true
     }
   ]
 }

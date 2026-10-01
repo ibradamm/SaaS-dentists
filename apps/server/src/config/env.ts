@@ -138,6 +138,32 @@ const bootstrapSchema = z.object({
   DATABASE_APP_PASSWORD: z.string().min(12, '12 caractères minimum'),
 });
 
+// Commandes d'administration des données d'un cabinet (docs/operations/fin-de-contrat.md).
+/** Export de restitution : rôle applicatif (RLS) et clé, pour déchiffrer les notes médicales. */
+const exportSchema = z.object({
+  ...baseShape,
+  ...databaseShape,
+  DATA_ENCRYPTION_KEY: encryptionKey,
+});
+
+/** Durée de revue facultative, en jours : mesure seulement, aucune suppression (ADR 0014). */
+const reviewDays = z.coerce.number().int().min(1).max(36_500).optional();
+const retentionReviewSchema = z.object({
+  ...baseShape,
+  ...databaseShape,
+  RETENTION_REVIEW_PATIENT_INACTIVE_DAYS: reviewDays,
+  RETENTION_REVIEW_BILLING_DAYS: reviewDays,
+  RETENTION_REVIEW_AUDIT_LOG_DAYS: reviewDays,
+  RETENTION_REVIEW_IMPORT_ROWS_DAYS: reviewDays,
+});
+
+/** Purge après résiliation : connexion administrateur, comme la création des rôles. */
+const purgeSchema = z.object({
+  ...baseShape,
+  DATABASE_ADMIN_URL: postgresUrl,
+  DATABASE_NAME: z.string().regex(/^[a-z_][a-z0-9_]{0,62}$/, 'nom de base invalide'),
+});
+
 export type ApiConfig = z.infer<typeof apiSchema>;
 export type WorkerConfig = z.infer<typeof workerSchema>;
 export type MigrateConfig = z.infer<typeof migrateSchema>;
@@ -172,3 +198,7 @@ export const loadMigrateConfig = (env: Env = process.env): MigrateConfig =>
   parse(migrateSchema, env);
 export const loadBootstrapConfig = (env: Env = process.env): BootstrapConfig =>
   parse(bootstrapSchema, env);
+export const loadExportConfig = (env: Env = process.env) => parse(exportSchema, env);
+export const loadRetentionReviewConfig = (env: Env = process.env) =>
+  parse(retentionReviewSchema, env);
+export const loadPurgeConfig = (env: Env = process.env) => parse(purgeSchema, env);
