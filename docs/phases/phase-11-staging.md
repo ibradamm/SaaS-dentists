@@ -141,7 +141,8 @@ Dans l'ordre (détail et critères : procédure, section 7) :
 
 - `253a94f` : pile staging locale en échec (défaut du script d'attente).
 - `1ba8218` : pile staging locale verte à tort (voir section 3) ; job Sentry déclenché par erreur (marqueur cité dans le message).
-- `d321c97` : corrections. Le résultat de ce commit, et de ceux qui suivent, figure dans le rapport de fin d'étape.
+- `d321c97` : corrections (`pipefail`, passerelle du réseau fixée, `--expect-ip 172.28.0.1`). Tous les jobs verts, Sentry ignoré comme prévu. Journal de la pile staging lu : 10 OK, dont « adresse du poste enregistrée (172.28.0.1) » ; « Aucun échec » ; 182 lignes de journaux sans secret ni jeton.
+- `c7c863e` (noms en arabe, revues) : tous les jobs verts, Sentry ignoré comme prévu. Pile staging locale : 10 OK, « Aucun échec ». Parcours de bout en bout : 56 sur 56 en 4,3 min, dont le parcours des noms en arabe ; contrôle final de 101 978 lignes sans donnée saisie.
 
 ## 10. Risques relevés pendant cette étape
 
@@ -164,4 +165,4 @@ Dans l'ordre (détail et critères : procédure, section 7) :
   - localisation acceptable ;
   - durées de conservation (dossier médical, paiements, journaux) ;
   - contrat de sous-traitance avec les cabinets ;
-  - langue (interface en français seulement ; noms en caractères arabes non testés).
+  - langue : interface en français seulement. Les noms en caractères arabes et tifinagh sont pris en charge pour la saisie, la recherche et les doublons (section 3) ; la lisibilité d'un écran mêlant français et arabe n'a pas été relue par un utilisateur.
