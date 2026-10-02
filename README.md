@@ -1,5 +1,7 @@
 # Plateforme de gestion de cabinet dentaire
 
+**État : MVP technique terminé (`v0.1.0-mvp`), non déployé.** Ce qui fonctionne, ce qui est repoussé, ce qui bloque la mise en ligne et comment déployer plus tard : [`docs/MVP-STATUS.md`](docs/MVP-STATUS.md).
+
 Périmètre actuel : SaaS de gestion du cabinet pour le personnel (ADR 0004). WhatsApp, l'agent IA et Google Calendar sont des extensions futures (`docs/future/`).
 
 Monorepo TypeScript :
@@ -9,7 +11,7 @@ Monorepo TypeScript :
 
 Fonctionnalités disponibles :
 - comptes, rôles (administrateur, dentiste, secrétaire), double authentification ;
-- dossiers patients : recherche, doublons, téléphones, archivage, notes médicales restreintes et chiffrées ;
+- dossiers patients : recherche, doublons, téléphones, archivage, notes médicales chiffrées, réservées au dentiste et à l'administrateur lui-même praticien du cabinet ;
 - import de patients depuis un fichier CSV ou Excel (menu Patients → « Importer un fichier », administrateur ; voir ADR 0005) ;
 - cabinet (profil, praticiens, types de rendez-vous) et disponibilités par praticien : horaires datés, absences, blocages, dans le fuseau du cabinet (ADR 0006) ;
 - agenda des rendez-vous (menu « Agenda ») : vues jour et semaine, création avec créneaux libres proposés, déplacement, statuts (prévu, honoré, patient absent, annulé), historique sur la fiche patient ; double réservation impossible, y compris en base ; hors horaires, sur un blocage ou dans le passé seulement après confirmation explicite, tracée (ADR 0007, 0008) ;
@@ -22,7 +24,7 @@ Architecture et décisions : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`d
 
 ## Prérequis
 
-- Node.js ≥ 22.12 (`.nvmrc`), pnpm 10 (`corepack enable`)
+- Node.js 22.23.3 exactement (`.nvmrc`, mêmes données de fuseau que les images Docker), pnpm 10 (`corepack enable`)
 - PostgreSQL 16, au choix :
   - Docker : `docker compose -f infra/docker-compose.yml up -d`
   - sans Docker, binaires PostgreSQL installés : `pnpm dev:db` (cluster local dans `.data/pg`)
@@ -67,17 +69,9 @@ pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && p
 ## Parcours de bout en bout (Playwright)
 
 ```bash
-pnpm e2e                  # build de production, puis les 52 parcours (environ 5 minutes)
+pnpm e2e                  # build de production, puis les 56 parcours (environ 5 minutes)
 pnpm --filter @dental/e2e exec playwright show-report artifacts/report
 ```
-
-Vérification d'un environnement hébergé (staging, puis production), par de vraies requêtes HTTP : `pnpm --filter @dental/e2e check:deployment --url https://… --accounts comptes.json --rate-limit --expect-ip <adresse du poste>` (comptes synthétiques créés par `staging:accounts`). Audit pré-production et état de chaque contrôle : `docs/phases/phase-11-audit-preproduction.md`.
-
-## Déploiement
-
-- Images : `infra/docker/` (serveur, interface avec Caddy). Pile staging locale en HTTPS, exécutée en CI : `infra/staging-local/compose.yml`.
-- Staging Railway (Infrastructure as Code) : `.railway/railway.ts`. Procédure, coûts et vérifications : `docs/operations/deploiement-staging.md`. Sauvegardes : `docs/operations/sauvegarde-restauration.md`. Décisions : ADR 0013.
-- **État : prêt, non déployé** (aucun budget d'hébergement accordé).
 
 - La pile est démarrée par Playwright :
   - base `dental_e2e` recréée ;
@@ -87,6 +81,14 @@ Vérification d'un environnement hébergé (staging, puis production), par de vr
   - le `.env` de `pnpm setup:env` (`TEST_DATABASE_ADMIN_URL`, mots de passe des rôles) ;
   - Chromium de la version figée de Playwright (`pnpm --filter @dental/e2e exec playwright install chromium`, sauf s'il est déjà fourni par l'environnement).
 - Ce qui est couvert (rôles, concurrence, réseau, changement d'heure, accessibilité, charge, restauration) et les chiffres mesurés : `docs/phases/phase-10.md` ; démonstration pas à pas : `docs/demo.md` ; règles : ADR 0012.
+
+Vérification d'un environnement hébergé (staging, puis production), par de vraies requêtes HTTP : `pnpm --filter @dental/e2e check:deployment --url https://… --accounts comptes.json --rate-limit --expect-ip <adresse du poste>` (comptes synthétiques créés par `staging:accounts`). Audit pré-production et état de chaque contrôle : `docs/phases/phase-11-audit-preproduction.md`.
+
+## Déploiement
+
+- Images : `infra/docker/` (serveur, interface avec Caddy). Pile staging locale en HTTPS, exécutée en CI : `infra/staging-local/compose.yml`.
+- Staging Railway (Infrastructure as Code) : `.railway/railway.ts`. Procédure, coûts et vérifications : `docs/operations/deploiement-staging.md`. Sauvegardes : `docs/operations/sauvegarde-restauration.md`. Décisions : ADR 0013.
+- **État : prêt, non déployé** (aucun budget d'hébergement accordé ; blocages externes : [`docs/MVP-STATUS.md`](docs/MVP-STATUS.md)).
 
 ## Structure
 

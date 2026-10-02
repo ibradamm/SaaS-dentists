@@ -1,4 +1,4 @@
-import { roleHasPermission, type Permission } from '@dental/shared';
+import { hasPermission, type Permission } from '@dental/shared';
 import { AppError } from '../../lib/errors';
 import type { UserActor } from '../auth/auth.types';
 import { authorizeAny } from '../auth/authorize';
@@ -17,11 +17,11 @@ export function canManageSchedule(
   actor: UserActor,
   practitioner: { userId: string | null } | null,
 ): boolean {
-  if (roleHasPermission(actor.role, 'schedule.manage_any')) return true;
+  if (hasPermission(actor, 'schedule.manage_any')) return true;
   return (
     practitioner !== null &&
     practitioner.userId === actor.userId &&
-    roleHasPermission(actor.role, 'schedule.manage_own')
+    hasPermission(actor, 'schedule.manage_own')
   );
 }
 

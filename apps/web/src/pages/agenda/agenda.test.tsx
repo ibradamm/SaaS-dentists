@@ -181,7 +181,7 @@ function setup(
     }),
     [`GET /api/appointments/${RDV_PAST}`]: () => ({ status: 200, body: past }),
     [`GET /api/appointments/${RDV_LATER}`]: () => ({ status: 200, body: later }),
-    'GET /api/patients': () => ({
+    'POST /api/patients/search': () => ({
       status: 200,
       body: {
         patients: [{ ...patient, birthDate: '1985-03-12', status: 'ACTIVE' }],
@@ -654,8 +654,8 @@ describe('agenda', () => {
     const NEW_ID = '01a0de00-0000-7000-8000-00000000a0ff';
     let duplicateChecks = 0;
     const calls = setup('SECRETARY', {
-      'GET /api/patients': () => ({ status: 200, body: { patients: [], total: 0 } }),
-      'GET /api/patients/duplicates': () => {
+      'POST /api/patients/search': () => ({ status: 200, body: { patients: [], total: 0 } }),
+      'POST /api/patients/duplicates': () => {
         duplicateChecks += 1;
         // Premier contrôle : un homonyme ; le second (après correction) : aucun.
         return duplicateChecks === 1

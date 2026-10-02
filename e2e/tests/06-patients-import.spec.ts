@@ -12,10 +12,21 @@ import { ARABIC_PATIENTS, PATIENTS } from '../support/sentinels';
  */
 let clinic: Clinic;
 let secretary: Page;
+// Écart E19 : toutes les adresses demandées par le navigateur de la secrétaire, pour vérifier
+// qu'aucune ne contient un nom saisi ou cherché (journaux des proxys et de l'hébergeur).
+const requestedUrls: string[] = [];
+const decoded = (url: string) => {
+  try {
+    return decodeURIComponent(url);
+  } catch {
+    return url;
+  }
+};
 
 test.beforeAll(async ({ browser }) => {
   clinic = await setupClinic(browser, 'Cabinet des Fiches');
   secretary = await signIn(browser, clinic.secretary);
+  secretary.on('request', (request) => requestedUrls.push(decoded(request.url()).toLowerCase()));
 });
 
 async function patientsNamed(lastName: string) {
@@ -170,4 +181,11 @@ test('secrétaire : import refusé (interface et serveur) ; recherche sans accen
   const list = secretary.getByRole('list', { name: 'Liste des patients' });
   await expect(list.getByRole('link', { name: /DELPIERRE Maël/ })).toBeVisible();
   await expect(list.getByRole('link')).toHaveCount(1);
+  // E19 : recherches et contrôles d'homonymes passent dans le corps des requêtes, jamais dans
+  // l'adresse.
+  const typed = ['mael', PATIENTS.a[0], PATIENTS.a[1], ARABIC_PATIENTS.a[0], ARABIC_PATIENTS.b[0]];
+  expect(requestedUrls.length).toBeGreaterThan(0);
+  expect(
+    requestedUrls.filter((url) => typed.some((text) => url.includes(text.toLowerCase()))),
+  ).toEqual([]);
 });

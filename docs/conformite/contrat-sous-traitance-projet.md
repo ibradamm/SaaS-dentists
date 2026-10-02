@@ -72,7 +72,7 @@ Le Sous-traitant aide le Responsable, dans des délais compatibles avec ses obli
 5. **Sauvegardes.** Les données subsistent dans les sauvegardes jusqu'à leur expiration, **au plus tard [89] jours** après la suppression. Elles ne sont ni consultées ni restaurées pour ce cabinet. En cas de restauration de la base pour un incident, la suppression est rejouée avant toute remise en service.
 6. **Attestation.** Le Sous-traitant remet une attestation indiquant la date de suppression et la date d'expiration de la dernière sauvegarde concernée.
 7. Restent hors de la suppression :
-   - les journaux techniques de l'hébergeur (adresses IP des postes, navigateur, chemins des requêtes ; 7 ou 30 jours selon l'offre). [À vérifier avant signature : si l'hébergeur enregistre aussi le texte des recherches présent dans l'adresse, ces journaux contiennent des noms de patients ; écart E19 de [decisions-a-prendre.md](decisions-a-prendre.md).] ;
+   - les journaux techniques de l'hébergeur (adresses IP des postes, navigateur, chemins des requêtes ; 7 ou 30 jours selon l'offre). Les adresses ne contiennent ni texte de recherche ni nom de patient (écart E19 corrigé) ;
    - le registre d'exploitation.
 
 ## Article 11 — Litiges
@@ -124,7 +124,7 @@ Droit marocain. [Juridiction compétente.]
   - sécurité au niveau des lignes (RLS) activée et forcée sur toutes les tables ;
   - filtre explicite par cabinet dans chaque requête ;
   - tests systématiques d'accès d'un cabinet aux données d'un autre.
-- **Contrôle d'accès par rôle** (administrateur, dentiste, secrétaire), vérifié côté serveur. Notes médicales accessibles aux rôles **dentiste et administrateur**, jamais à la secrétaire ; chaque lecture est tracée. [Accès de l'administrateur non soignant : à arbitrer, écart E18.]
+- **Contrôle d'accès par rôle** (administrateur, dentiste, secrétaire), vérifié côté serveur. Notes médicales accessibles au rôle **dentiste**, et à l'administrateur **seulement s'il est lui-même praticien** du cabinet ; jamais à la secrétaire ; chaque lecture est tracée (écart E18).
 - **Authentification :**
   - mots de passe Argon2id ;
   - verrouillage après 10 échecs (15 minutes) ;

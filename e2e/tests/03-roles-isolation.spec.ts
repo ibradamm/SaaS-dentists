@@ -69,6 +69,7 @@ test('appels directs refusés par le serveur, même en contournant l’interface
   const today = todayIn();
   const cases: [keyof typeof pages, string, string, unknown?][] = [
     ['SECRETARY', 'GET', `/api/patients/${patientId}/medical-notes`],
+    ['ADMIN', 'GET', `/api/patients/${patientId}/medical-notes`],
     ['SECRETARY', 'GET', `/api/finance/revenue?from=${today}&to=${today}`],
     ['SECRETARY', 'GET', `/api/audit-logs?from=${today}&to=${today}`],
     ['SECRETARY', 'GET', '/api/users'],
@@ -89,7 +90,7 @@ test('appels directs refusés par le serveur, même en contournant l’interface
   }
 });
 
-test('notes médicales : le dentiste oui, la secrétaire non, lecture tracée, heure du cabinet', async () => {
+test('notes médicales : le dentiste oui, la secrétaire non, l’administrateur seulement s’il est praticien, heure du cabinet', async () => {
   const dentist = pages.DENTIST;
   await dentist.goto(`/patients/${patientId}`);
   await dentist.getByRole('button', { name: 'Afficher les notes médicales' }).click();
@@ -104,6 +105,24 @@ test('notes médicales : le dentiste oui, la secrétaire non, lecture tracée, h
   ).toBeVisible();
   await expect(secretary.getByRole('heading', { name: 'Notes médicales' })).toHaveCount(0);
   await expect(secretary.getByText(MEDICAL_NOTE)).toHaveCount(0);
+
+  // E18 : l'administrateur n'y accède que si son compte est lié à un praticien actif.
+  const admin = pages.ADMIN;
+  await admin.goto(`/patients/${patientId}`);
+  await expect(
+    admin.getByRole('heading', { name: `${PATIENTS.a[0].toUpperCase()} ${PATIENTS.a[1]}` }),
+  ).toBeVisible();
+  await expect(admin.getByRole('heading', { name: 'Notes médicales' })).toHaveCount(0);
+  const me = await api<{ user: { id: string } }>(admin, 'GET', '/api/auth/me');
+  const linked = await api(admin, 'POST', '/api/practitioners', {
+    displayName: 'Dr Gérante',
+    color: '#f97316',
+    userId: me.body.user.id,
+  });
+  expect(linked.status).toBe(201);
+  await admin.reload();
+  await admin.getByRole('button', { name: 'Afficher les notes médicales' }).click();
+  await expect(admin.getByText(MEDICAL_NOTE)).toBeVisible();
 });
 
 test('second cabinet : ne voit ni ne modifie rien du premier', async ({ browser }) => {

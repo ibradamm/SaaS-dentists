@@ -81,7 +81,7 @@ describe('liste des patients', () => {
   it('affiche la liste, recherche côté serveur et masque les actions non autorisées', async () => {
     const calls = mockApi({
       ...session('SECRETARY'),
-      'GET /api/patients': () => ({ status: 200, body: { patients: [summary], total: 1 } }),
+      'POST /api/patients/search': () => ({ status: 200, body: { patients: [summary], total: 1 } }),
     });
     renderApp('/patients');
     const list = await screen.findByRole('list', { name: 'Liste des patients' });
@@ -94,19 +94,42 @@ describe('liste des patients', () => {
 
     fill(/Rechercher \(nom/, ' dup ');
     await waitFor(() =>
-      expect(calls.some((c) => c.url.startsWith('/api/patients?') && c.url.includes('q=dup'))).toBe(
-        true,
-      ),
+      expect(calls.some((c) => (c.body as { q?: string } | undefined)?.q === 'dup')).toBe(true),
     );
-    expect(calls[calls.length - 1]?.url).toBe(
-      '/api/patients?q=dup&status=ACTIVE&limit=25&offset=0',
-    );
+    const last = calls[calls.length - 1];
+    expect([last?.method, last?.url, last?.body]).toEqual([
+      'POST',
+      '/api/patients/search',
+      { q: 'dup', status: 'ACTIVE', limit: 25, offset: 0 },
+    ]);
+    // E19 : le texte cherché n'apparaît dans aucune adresse.
+    expect(calls.filter((c) => c.url.includes('dup'))).toEqual([]);
+  });
+
+  it('« Voir les résultats » de la recherche rapide : terme repris, absent de l’adresse (E19)', async () => {
+    const calls = mockApi({
+      ...session('SECRETARY'),
+      'POST /api/patients/search': () => ({ status: 200, body: { patients: [summary], total: 7 } }),
+    });
+    const router = renderApp('/patients/nouveau');
+    await screen.findByRole('heading', { name: 'Nouveau patient' });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Rechercher un patient' }), {
+      target: { value: 'Dupont' },
+    });
+    fireEvent.click(await screen.findByRole('link', { name: 'Voir les 7 résultats' }));
+    await screen.findByRole('list', { name: 'Liste des patients' });
+    expect(screen.getByLabelText(/Rechercher \(nom/)).toHaveValue('Dupont');
+    expect([router.state.location.pathname, router.state.location.search]).toEqual([
+      '/patients',
+      '',
+    ]);
+    expect(calls.filter((c) => c.url.includes('Dupont'))).toEqual([]);
   });
 
   it("l'administrateur voit le lien d'import", async () => {
     mockApi({
       ...session('ADMIN'),
-      'GET /api/patients': () => ({ status: 200, body: { patients: [], total: 0 } }),
+      'POST /api/patients/search': () => ({ status: 200, body: { patients: [], total: 0 } }),
     });
     renderApp('/patients');
     expect(await screen.findByText('Aucun patient trouvé.')).toBeInTheDocument();
@@ -117,7 +140,10 @@ describe('liste des patients', () => {
     for (const role of ['DENTIST', 'SECRETARY'] as const) {
       const calls = mockApi({
         ...session(role),
-        'GET /api/patients': () => ({ status: 200, body: { patients: [summary], total: 1 } }),
+        'POST /api/patients/search': () => ({
+          status: 200,
+          body: { patients: [summary], total: 1 },
+        }),
       });
       const router = renderApp('/patients');
       await screen.findByRole('list', { name: 'Liste des patients' });
@@ -138,7 +164,7 @@ describe('création de fiche', () => {
     const created = detail({ id: OTHER_ID, version: 1, birthDate: null, primaryPhone: null });
     const calls = mockApi({
       ...session('SECRETARY'),
-      'GET /api/patients/duplicates': () => ({ status: 200, body: { candidates: [summary] } }),
+      'POST /api/patients/duplicates': () => ({ status: 200, body: { candidates: [summary] } }),
       'POST /api/patients': () => ({ status: 201, body: created }),
       [`GET /api/patients/${OTHER_ID}`]: () => ({ status: 200, body: created }),
     });
@@ -157,9 +183,11 @@ describe('création de fiche', () => {
       screen.getByRole('link', { name: /DUPONT Léa, né\(e\) le 12\/03\/1985/ }),
     ).toHaveAttribute('href', `/patients/${PATIENT_ID}`);
     expect(calls.find((c) => c.method === 'POST' && c.url === '/api/patients')).toBeUndefined();
-    expect(calls.find((c) => c.url.startsWith('/api/patients/duplicates'))?.url).toBe(
-      '/api/patients/duplicates?lastName=Dupont&firstName=L%C3%A9a',
-    );
+    const check = calls.find((c) => c.url === '/api/patients/duplicates');
+    expect([check?.method, check?.body]).toEqual([
+      'POST',
+      { lastName: 'Dupont', firstName: 'Léa' },
+    ]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Créer quand même' }));
     expect(await screen.findByRole('heading', { name: 'DUPONT Léa' })).toBeInTheDocument();
@@ -176,7 +204,7 @@ describe('création de fiche', () => {
   it("modifier le nom après l'alerte relance la recherche de doublons", async () => {
     const calls = mockApi({
       ...session('SECRETARY'),
-      'GET /api/patients/duplicates': () => ({ status: 200, body: { candidates: [summary] } }),
+      'POST /api/patients/duplicates': () => ({ status: 200, body: { candidates: [summary] } }),
     });
     renderApp('/patients/nouveau');
     await screen.findByRole('heading', { name: 'Nouveau patient' });
@@ -188,8 +216,8 @@ describe('création de fiche', () => {
     expect(screen.getByRole('button', { name: 'Créer la fiche' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Créer la fiche' }));
     await screen.findByRole('button', { name: 'Créer quand même' });
-    expect(calls.filter((c) => c.url.startsWith('/api/patients/duplicates'))).toHaveLength(2);
-    expect(calls.find((c) => c.method === 'POST')).toBeUndefined();
+    expect(calls.filter((c) => c.url === '/api/patients/duplicates')).toHaveLength(2);
+    expect(calls.find((c) => c.method === 'POST' && c.url === '/api/patients')).toBeUndefined();
   });
 });
 

@@ -2,7 +2,7 @@ import {
   MAX_STATS_DAYS,
   dashboardQuerySchema,
   granularityFor,
-  roleHasPermission,
+  hasPermission,
   shiftPeriod,
   type ActivityStats,
   type DashboardResponse,
@@ -63,7 +63,7 @@ export function createStatsService(deps: { db: Database; now?: () => Date }) {
 
   async function dashboard(actor: UserActor, query: Record<string, unknown>) {
     authorizeAny(actor, DASHBOARD_PERMISSIONS);
-    const can = (permission: Permission) => roleHasPermission(actor.role, permission);
+    const can = (permission: Permission) => hasPermission(actor, permission);
     const q = dashboardQuerySchema.parse(query);
     checkRange(q.from, q.to, MAX_STATS_DAYS);
     const period = { from: q.from, to: q.to };

@@ -145,9 +145,13 @@ describe('isolation entre cabinets : toutes les routes, identifiants d’un autr
     });
     b.patient = patient.json<{ id: string }>().id;
     b.contact = patient.json<{ contacts: { id: string }[] }>().contacts[0]!.id;
+    const dentistB = await signedIn(clinicB, 'DENTIST');
     expect(
-      (await adminB.post(`/api/patients/${b.patient}/medical-notes`, { content: 'Bfuitemedical' }))
-        .statusCode,
+      (
+        await dentistB.post(`/api/patients/${b.patient}/medical-notes`, {
+          content: 'Bfuitemedical',
+        })
+      ).statusCode,
     ).toBe(204);
     b.appointment = await idOf(
       secretaryB.post('/api/appointments', {
@@ -219,6 +223,18 @@ describe('isolation entre cabinets : toutes les routes, identifiants d’un autr
 
   it('aucune réponse ne contient de donnée de B ; aucune donnée de B ne change', async () => {
     const adminA = await signedIn(clinicA, 'ADMIN');
+    // Administrateur lui-même praticien (E18) : les routes des notes médicales passent le
+    // contrôle de permission et atteignent la recherche de la donnée de B.
+    const { user } = (await adminA.get('/api/auth/me')).json<{ user: { id: string } }>();
+    expect(
+      (
+        await adminA.post('/api/practitioners', {
+          displayName: 'Apraticien',
+          color: '#0ea5e9',
+          userId: user.id,
+        })
+      ).statusCode,
+    ).toBe(201);
     // La vérification du journal de B (plus bas) crée une session dans B : elle se fait avant
     // la première empreinte.
     const day = (offset: number) =>
@@ -274,6 +290,9 @@ describe('isolation entre cabinets : toutes les routes, identifiants d’un autr
       'PATCH /api/users/:id': { role: 'SECRETARY' },
       'POST /api/appointments/:id/status': { version: 1, status: 'CANCELLED', reason: null },
       'PATCH /api/patients/:id/contacts/:contactId': { label: 'Intrus' },
+      // Recherches (corps de requête, écart E19) : on cherche exactement les patients de B.
+      'POST /api/patients/search': { q: 'Bfuitenom' },
+      'POST /api/patients/duplicates': { lastName: 'Bfuitenom', firstName: 'Bfuiteprenom' },
     };
     const query = new URLSearchParams({
       from: '2026-09-28',
@@ -281,9 +300,6 @@ describe('isolation entre cabinets : toutes les routes, identifiants d’un autr
       practitionerId: b.practitioner!,
       patientId: b.patient!,
       appointmentTypeId: b.type!,
-      q: 'Bfuitenom',
-      lastName: 'Bfuitenom',
-      firstName: 'Bfuiteprenom',
       durationMinutes: '30',
       actorId: b.user!,
       entityId: b.patient!,

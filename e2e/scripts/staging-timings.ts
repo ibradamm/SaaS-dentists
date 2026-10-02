@@ -40,19 +40,34 @@ const cookie = call.cookie();
 
 const day = (offset = 0) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
 const [year, month] = day().split('-');
-const endpoints: [string, string][] = [
+// Chemin, et corps pour une lecture en POST (recherche : texte hors de l'adresse, écart E19).
+const endpoints: [string, string, unknown?][] = [
   ['session', '/api/auth/me'],
   ['tableau de bord (jour)', `/api/dashboard?from=${day()}&to=${day()}`],
   ['tableau de bord (année)', `/api/dashboard?from=${year}-01-01&to=${year}-12-31`],
   ['revenus (mois)', `/api/finance/revenue?from=${year}-${month}-01&to=${day()}`],
   ['agenda (semaine)', `/api/appointments?from=${day()}&to=${day(6)}`],
-  ['recherche de patients', '/api/patients?q=test'],
+  ['recherche de patients', '/api/patients/search', { q: 'test' }],
   ['journal d’audit (mois)', `/api/audit-logs?from=${year}-${month}-01&to=${day()}`],
 ];
 
-async function timed(path: string): Promise<{ ms: number; status: number }> {
+async function timed(path: string, body?: unknown): Promise<{ ms: number; status: number }> {
   const started = performance.now();
-  const res = await fetch(new URL(path, base), { headers: { cookie } });
+  const res = await fetch(
+    new URL(path, base),
+    body === undefined
+      ? { headers: { cookie } }
+      : {
+          method: 'POST',
+          headers: {
+            cookie,
+            'content-type': 'application/json',
+            origin: base.origin,
+            'x-csrf-token': call.csrf(),
+          },
+          body: JSON.stringify(body),
+        },
+  );
   await res.arrayBuffer();
   return { ms: performance.now() - started, status: res.status };
 }
@@ -64,11 +79,11 @@ const summary = (ms: number[]) => {
 };
 
 console.log(`Environnement : ${base.origin}`);
-for (const [label, path] of endpoints) {
+for (const [label, path, body] of endpoints) {
   const samples: number[] = [];
   const errors: number[] = [];
   for (let i = 0; i < 20; i++) {
-    const r = await timed(path);
+    const r = await timed(path, body);
     samples.push(r.ms);
     if (r.status !== 200) errors.push(r.status);
   }
@@ -84,7 +99,8 @@ const statuses = new Map<number, number>();
 await Promise.all(
   Array.from({ length: concurrency }, async (_, worker) => {
     for (let i = worker; performance.now() < until; i++) {
-      const r = await timed(endpoints[i % endpoints.length]![1]);
+      const [, path, body] = endpoints[i % endpoints.length]!;
+      const r = await timed(path, body);
       statuses.set(r.status, (statuses.get(r.status) ?? 0) + 1);
       if (r.status === 200) latencies.push(r.ms);
     }

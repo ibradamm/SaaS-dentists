@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { Alert, Badge, Loading, SelectField, TextField } from '../../components/ui';
 import { api, errorMessage } from '../../lib/api';
 import { can, useMe } from '../../lib/auth';
@@ -14,9 +14,10 @@ const linkButton =
 
 export function PatientsPage() {
   const { data: me } = useMe();
-  // ?q=… : suite de la recherche rapide de l'en-tête.
-  const [params] = useSearchParams();
-  const [search, setSearch] = useState(params.get('q') ?? '');
+  // Suite de la recherche rapide de l'en-tête : terme passé dans l'état de navigation, jamais
+  // dans l'adresse (écart E19).
+  const location = useLocation();
+  const [search, setSearch] = useState(() => (location.state as { q?: string } | null)?.q ?? '');
   const [status, setStatus] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
   const [page, setPage] = useState(0);
   const q = useDebounced(search.trim(), 300);

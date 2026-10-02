@@ -36,9 +36,10 @@ describe('isolation des tables patients et import (RLS)', () => {
   beforeAll(async () => {
     a = await createTestClinic(t.ownerDb);
     b = await createTestClinic(t.ownerDb);
-    const adminA = actorFor((await createUser(t.ownerDb, a.id, 'ADMIN')).id, 'ADMIN', a.id);
+    // Administrateurs eux-mêmes praticiens : ils écrivent aussi une note médicale (E18).
+    const adminA = actorFor((await createUser(t.ownerDb, a.id, 'ADMIN')).id, 'ADMIN', a.id, true);
     adminB = (await createUser(t.ownerDb, b.id, 'ADMIN')).id;
-    const actorB = actorFor(adminB, 'ADMIN', b.id);
+    const actorB = actorFor(adminB, 'ADMIN', b.id, true);
 
     for (const actor of [adminA, actorB]) {
       const patient = await patientsService.create(

@@ -32,7 +32,7 @@ Le logiciel du cabinet n'enregistre aucun numéro de carte ni de compte bancaire
 - Les autres informations sont [facultatives / nécessaires à votre prise en charge : à préciser par le cabinet].
 
 **Qui y a accès ?**
-- Le personnel du cabinet, selon ses fonctions. Les notes médicales ne sont accessibles qu'au praticien [et à l'administrateur du cabinet : à décider par le cabinet, écart E18].
+- Le personnel du cabinet, selon ses fonctions. Les notes médicales ne sont accessibles qu'aux praticiens du cabinet.
 - La société [éditeur du logiciel], prestataire du cabinet. Elle héberge et maintient le logiciel. Elle n'agit que sur instruction du cabinet et est tenue à la confidentialité.
 - L'hébergeur informatique de ce prestataire.
 

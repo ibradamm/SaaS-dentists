@@ -60,6 +60,7 @@ async function seedSchedules(db: Database, clinicId: string, adminId: string, de
     userId: adminId,
     clinicId,
     role: 'ADMIN' as const,
+    isPractitioner: false,
     sessionId: '00000000-0000-7000-8000-000000000000',
   };
   const meta = { ip: null, userAgent: null, requestId: 'seed' };

@@ -20,6 +20,7 @@ describe('gestion des utilisateurs', () => {
     userId,
     clinicId,
     role,
+    isPractitioner: false,
     sessionId: '00000000-0000-7000-8000-000000000000',
   });
 

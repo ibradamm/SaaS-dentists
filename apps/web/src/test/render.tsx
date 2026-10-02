@@ -55,7 +55,7 @@ export function me(role: Role, restriction: SessionRestriction | null = null): M
     },
     clinic: { id: '01a0de00-0000-7000-8000-0000000000c1', name: 'Cabinet du Parc' },
     role,
-    permissions: restriction ? [] : permissionsOf(role),
+    permissions: restriction ? [] : permissionsOf({ role, isPractitioner: false }),
     restriction,
     csrfToken: 'csrf-me',
   };

@@ -14,7 +14,7 @@ Personnes concernées : **patients** et leurs contacts (proches), **personnel** 
 |---|---|---|---|---|
 | `patients` | Patients | Nom, prénom, date de naissance, e-mail, note administrative (texte libre), statut, origine (saisie ou import) | Oui par contexte : être patient d'un cabinet dentaire est une donnée de santé | RLS par cabinet ; volume chiffré **non vérifié** chez l'hébergeur |
 | `patient_contacts` | Patients, proches | Téléphone, lien (patient lui-même, tuteur, autre), libellé | Idem | RLS |
-| `patient_medical_notes` | Patients | Notes médicales | **Oui** | Chiffrées dans l'application (AES-256-GCM, `DATA_ENCRYPTION_KEY`) ; lecture par les rôles dentiste **et administrateur**, tracée (écart E18) |
+| `patient_medical_notes` | Patients | Notes médicales | **Oui** | Chiffrées dans l'application (AES-256-GCM, `DATA_ENCRYPTION_KEY`) ; lecture par le rôle dentiste et par un administrateur **lui-même praticien** du cabinet, tracée (écart E18 corrigé) |
 | `appointments` | Patients, praticiens | Date, type d'acte, statut, **note libre**, motif d'annulation | Oui : type d'acte et note peuvent révéler un soin | RLS ; note **en clair** |
 | `charges`, `payments` | Patients | Libellé de l'acte, montant, mode de paiement, référence facultative, motif d'annulation | Oui (libellé de l'acte) | RLS ; **aucune donnée de carte ni de compte bancaire** |
 | `import_batches`, `import_rows` | Patients | Copie des lignes importées (`data`), effacée à la validation de l'import ; restent dans les lignes validées la **clé d'identité** (nom et prénom normalisés, date de naissance), la référence externe (ancien logiciel) et les codes d'anomalie | Idem patients | RLS ; brouillons supprimés après 24 h ; clé et référence conservées sans limite (écart E9) |
@@ -24,7 +24,7 @@ Personnes concernées : **patients** et leurs contacts (proches), **personnel** 
 | `audit_logs` | Personnel (auteur), patients (objet) | Action, identifiants, champs modifiés **sans leur valeur**, **adresse IP** | Indirectement | Ajout seul pour l'application ; aucune suppression |
 | `clinics` | Cabinet | Nom, coordonnées, fuseau, paramètres, statut, conservation pour litige | Non | RLS |
 | Journaux de l'API (sortie standard → hébergeur) | Personnel | Méthode, chemin **sans paramètres**, **adresse IP du poste**, identifiant de requête, erreurs sans valeur saisie | Non | Aucune valeur saisie ; 7 jours (Hobby) ou 30 jours (Pro) chez Railway (DOC. FOURNISSEUR LUE) |
-| Journaux HTTP du proxy de l'hébergeur (hors de notre code) | Personnel ; patients si le texte des recherches y figure | Adresse IP, navigateur, chemin ; **chaîne de requête (`?q=…`, recherche de patients) : NON VÉRIFIÉ** | Possible | Hors de notre contrôle ; 7 ou 30 jours (écart E19) |
+| Journaux HTTP du proxy de l'hébergeur (hors de notre code) | Personnel | Adresse IP, navigateur, chemin. Aucun texte de recherche ni nom de patient dans les adresses (écart E19 corrigé) | Non | Hors de notre contrôle ; 7 ou 30 jours |
 | Sentry (si activé) | — | Type et code d'erreur, pile d'appels, service, identifiant de requête ; **ni adresse IP, ni utilisateur, ni valeur saisie** (`error-reporter.ts`, testé) | Non | Région UE : Francfort ; certaines métadonnées de compte aux États-Unis (DOC. FOURNISSEUR (RECHERCHE)) |
 | Navigateur | Personnel | Cookie de session seulement ; aucun stockage local de données | Non | `__Host-`, `Secure`, `HttpOnly` |
 
@@ -68,8 +68,8 @@ Aucune donnée n'est collectée **auprès du patient** directement. Le personnel
 | E16 | **Comptes communs à plusieurs cabinets** : qualification (responsable ou sous-traitant) pour les données d'authentification | Faible | À décider (juriste) |
 | E17 | **Violation de données** : aucune procédure de notification au cabinet | Moyenne | Documenté : clause du contrat (délai à fixer) ; procédure d'incident à écrire avant la production |
 
-| E18 | Le rôle **Administrateur** lit et écrit les notes médicales (toutes les permissions). Les documents précédents disaient « réservées au dentiste » : corrigé | Moyenne | À décider (vous et le juriste) : [decisions-a-prendre.md](decisions-a-prendre.md) |
-| E19 | **Journaux HTTP de l'hébergeur** : adresse IP, navigateur, chemin ; le texte des recherches de patients (`?q=`) y figure peut-être | Moyenne à élevée | À décider : question posée à Railway ; correction possible (recherche hors de l'adresse) |
+| E18 | Le rôle **Administrateur** lisait et écrivait les notes médicales | Moyenne | **Corrigé le 2026-10-02** : notes réservées au dentiste et à l'administrateur lui-même praticien actif. Question 9 du juriste toujours ouverte |
+| E19 | **Journaux HTTP de l'hébergeur** : le texte des recherches de patients passait dans l'adresse (`?q=`) | Moyenne à élevée | **Corrigé le 2026-10-02** : recherche et contrôle des homonymes en POST, texte dans le corps |
 | E20 | **Tigris**, sous-traitant de Railway pour l'archive de restauration, absent de la liste | Faible | Documenté : annexe 4 du contrat, inventaire |
 
 Analyse détaillée de E9 à E20 : [decisions-a-prendre.md](decisions-a-prendre.md).

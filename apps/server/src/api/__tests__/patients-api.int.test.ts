@@ -42,6 +42,10 @@ describe('API patients et import', () => {
   });
 
   async function signedIn(role: Role): Promise<Browser> {
+    return (await signedInUser(role)).b;
+  }
+
+  async function signedInUser(role: Role): Promise<{ b: Browser; id: string }> {
     const user = await createUser(t.ownerDb, clinic.id, role);
     const secret =
       role === 'SECRETARY' ? null : await enableMfa(t.ownerDb, clinic.id, user.id, secretBox);
@@ -51,7 +55,7 @@ describe('API patients et import', () => {
       clock.advanceSeconds(30);
       await b.post('/api/auth/mfa/verify', { code: await totpAt(secret, clock.epochSeconds()) });
     }
-    return b;
+    return { b, id: user.id };
   }
 
   async function createPatient(b: Browser, lastName = 'Moreau') {
@@ -67,7 +71,8 @@ describe('API patients et import', () => {
 
   describe('permissions HTTP par rôle', () => {
     const expectations: Record<Role, { medical: boolean; imports: boolean }> = {
-      ADMIN: { medical: true, imports: true },
+      // E18 : un administrateur qui n'est pas lui-même praticien n'accède pas aux notes.
+      ADMIN: { medical: false, imports: true },
       DENTIST: { medical: true, imports: false },
       SECRETARY: { medical: false, imports: false },
     };
@@ -75,7 +80,7 @@ describe('API patients et import', () => {
     it.each(['ADMIN', 'DENTIST', 'SECRETARY'] as const)('%s', async (role) => {
       const b = await signedIn(role);
       const patient = await createPatient(b, `Perm${role}`);
-      expect((await b.get('/api/patients?q=perm')).statusCode).toBe(200);
+      expect((await b.post('/api/patients/search', { q: 'perm' })).statusCode).toBe(200);
       expect((await b.get(`/api/patients/${patient.id}`)).statusCode).toBe(200);
       expect(
         (
@@ -107,17 +112,48 @@ describe('API patients et import', () => {
     });
   });
 
+  it("administrateur : notes médicales seulement s'il est lui-même praticien actif (E18)", async () => {
+    const { b, id } = await signedInUser('ADMIN');
+    const patient = await createPatient(b, 'Gerant');
+    const notes = async () => (await b.get(`/api/patients/${patient.id}/medical-notes`)).statusCode;
+    const medical = async () =>
+      (await b.get('/api/auth/me'))
+        .json<{ permissions: string[] }>()
+        .permissions.filter((p) => p.startsWith('patient.medical'));
+    expect([await notes(), await medical()]).toEqual([403, []]);
+
+    const linked = await b.post('/api/practitioners', {
+      displayName: 'Dr Gérant',
+      color: '#0ea5e9',
+      userId: id,
+    });
+    expect(linked.statusCode).toBe(201);
+    expect([await notes(), await medical()]).toEqual([
+      200,
+      ['patient.medical.read', 'patient.medical.write'],
+    ]);
+
+    // Praticien archivé : l'accès tombe à la requête suivante, sans nouvelle connexion.
+    const { id: practitionerId, version } = linked.json<{ id: string; version: number }>();
+    expect(
+      (await b.post(`/api/practitioners/${practitionerId}/archive`, { version })).statusCode,
+    ).toBe(200);
+    expect([await notes(), await medical()]).toEqual([403, []]);
+  });
+
   it('recherche, doublons, contacts, archivage via HTTP', async () => {
     const b = await signedIn('SECRETARY');
     const p = await createPatient(b, 'Rechercheapi');
     const found = listPatientsResponseSchema.parse(
-      (await b.get('/api/patients?q=RECHERCHEAPI')).json(),
+      (await b.post('/api/patients/search', { q: 'RECHERCHEAPI' })).json(),
     );
     expect(found.patients.map((x) => x.id)).toContain(p.id);
     const dup = (
-      await b.get(
-        '/api/patients/duplicates?lastName=Rechercheapi&firstName=ines&birthDate=1988-04-01',
-      )
+      await b.post('/api/patients/duplicates', {
+        lastName: 'Rechercheapi',
+        firstName: 'ines',
+        birthDate: '1988-04-01',
+      })
     ).json<{ candidates: { id: string }[] }>();
     expect(dup.candidates.map((c) => c.id)).toContain(p.id);
 
@@ -271,15 +307,24 @@ describe('API patients et import', () => {
     expect(huge.statusCode).toBe(413);
   });
 
-  it('les journaux ne contiennent ni la chaîne de requête ni les données recherchées', async () => {
+  it('E19 : données recherchées absentes des adresses et des journaux', async () => {
     const s = await signedIn('SECRETARY');
-    expect((await s.get('/api/patients?q=Zorglub-Confidentiel')).statusCode).toBe(200);
-    const duplicates = await s.get(
-      '/api/patients/duplicates?lastName=Zorglub&firstName=Secret&birthDate=1970-01-01',
+    expect((await s.post('/api/patients/search', { q: 'Zorglub-Confidentiel' })).statusCode).toBe(
+      200,
     );
+    const duplicates = await s.post('/api/patients/duplicates', {
+      lastName: 'Zorglub',
+      firstName: 'Secret',
+      birthDate: '1970-01-01',
+    });
     expect(duplicates.statusCode).toBe(200);
+    // Les anciennes formes en GET n'existent plus : aucune recherche n'est servie par l'adresse.
+    expect((await s.get('/api/patients?q=Zorglub')).statusCode).toBe(404);
+    expect(
+      (await s.get('/api/patients/duplicates?lastName=Zorglub&firstName=Secret')).statusCode,
+    ).toBe(400);
     const logs = logLines.join('');
-    expect(logs).toContain('"path":"/api/patients"');
+    expect(logs).toContain('"path":"/api/patients/search"');
     expect(logs).toContain('"path":"/api/patients/duplicates"');
     expect(logs).not.toMatch(/Zorglub|1970-01-01|"url"/);
   });

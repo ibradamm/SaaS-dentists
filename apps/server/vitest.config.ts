@@ -1,5 +1,16 @@
 import { defineConfig } from 'vitest/config';
 
+// Tâche de conservation : elle purge tous les cabinets de sa base avec l'horloge réelle. Ses
+// tests ont leur propre base (un globalSetup par projet), sinon elle annulerait les brouillons
+// d'import, datés par une horloge de test passée, d'autres fichiers exécutés en parallèle.
+const RETENTION_TESTS = 'src/jobs/__tests__/retention.int.test.ts';
+
+const integration = {
+  globalSetup: ['test/global-setup.ts'],
+  testTimeout: 30_000,
+  hookTimeout: 60_000,
+};
+
 export default defineConfig({
   test: {
     projects: [
@@ -15,10 +26,12 @@ export default defineConfig({
         test: {
           name: 'integration',
           include: ['src/**/*.int.test.ts'],
-          globalSetup: ['test/global-setup.ts'],
-          testTimeout: 30_000,
-          hookTimeout: 60_000,
+          exclude: [RETENTION_TESTS],
+          ...integration,
         },
+      },
+      {
+        test: { name: 'integration-retention', include: [RETENTION_TESTS], ...integration },
       },
     ],
   },

@@ -13,6 +13,8 @@ export interface UserActor {
   userId: string;
   clinicId: string;
   role: Role;
+  /** Compte lié à un praticien actif du cabinet (notes médicales d'un administrateur, E18). */
+  isPractitioner: boolean;
   sessionId: string;
 }
 

@@ -92,24 +92,30 @@ export const patientDetailSchema = patientSummarySchema.extend({
 });
 export type PatientDetail = z.infer<typeof patientDetailSchema>;
 
-export const listPatientsQuerySchema = z.object({
+/**
+ * Recherche et détection de doublons : le texte saisi (nom, téléphone, date de naissance) part
+ * dans le corps d'une requête POST, jamais dans l'adresse, que les proxys et hébergeurs
+ * journalisent (écart E19).
+ */
+export const searchPatientsRequestSchema = z.object({
   q: z.string().trim().max(100).optional(),
   status: patientStatusSchema.default('ACTIVE'),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).max(100_000).default(0),
 });
-export type ListPatientsQuery = z.input<typeof listPatientsQuerySchema>;
+export type SearchPatientsRequest = z.input<typeof searchPatientsRequestSchema>;
 
 export const listPatientsResponseSchema = z.object({
   patients: z.array(patientSummarySchema),
   total: z.number().int(),
 });
 
-export const duplicateQuerySchema = z.object({
+export const duplicateCheckRequestSchema = z.object({
   lastName: name,
   firstName: name,
   birthDate: isoDate.optional(),
 });
+export type DuplicateCheckRequest = z.input<typeof duplicateCheckRequestSchema>;
 export const duplicateCandidatesResponseSchema = z.object({
   candidates: z.array(patientSummarySchema),
 });

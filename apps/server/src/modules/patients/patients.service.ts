@@ -3,7 +3,7 @@ import type {
   Contact,
   ContactInput,
   CreatePatientRequest,
-  ListPatientsQuery,
+  SearchPatientsRequest,
   MedicalNote,
   PatientDetail,
   PatientSummary,
@@ -13,7 +13,7 @@ import type {
 import {
   contactInputSchema,
   createPatientRequestSchema,
-  listPatientsQuerySchema,
+  searchPatientsRequestSchema,
   updatePatientRequestSchema,
 } from '@dental/shared';
 import {
@@ -185,10 +185,10 @@ export function createPatientsService(deps: {
 
   async function list(
     actor: UserActor,
-    query: ListPatientsQuery,
+    query: SearchPatientsRequest,
   ): Promise<{ patients: PatientSummary[]; total: number }> {
     authorize(actor, 'patient.read');
-    const q = listPatientsQuerySchema.parse(query);
+    const q = searchPatientsRequestSchema.parse(query);
     const conditions: SQL[] = [
       eq(patients.clinicId, actor.clinicId),
       eq(patients.status, q.status),

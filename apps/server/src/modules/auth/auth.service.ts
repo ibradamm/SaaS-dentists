@@ -2,7 +2,7 @@ import type { LoginRequest, MfaSetupResponse, Role, AuditAction } from '@dental/
 import { and, eq, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { Logger } from '../../config/logger';
 import type { Database, Transaction } from '../../db/client';
-import { clinicMemberships, clinics, sessions, users } from '../../db/schema';
+import { clinicMemberships, clinics, practitioners, sessions, users } from '../../db/schema';
 import { setDbContext, withDbContext, withTenant } from '../../db/tenant';
 import { AppError } from '../../lib/errors';
 import type { SecretBox } from '../../lib/secret-box';
@@ -294,6 +294,12 @@ export function createAuthService(deps: AuthServiceDeps) {
           role: clinicMemberships.role,
           membershipStatus: clinicMemberships.status,
           clinic: clinics,
+          // Qualité de praticien (E18) : relue à chaque requête, un archivage prend effet aussitôt.
+          isPractitioner: sql<boolean>`exists (
+            select 1 from ${practitioners}
+            where ${practitioners.clinicId} = ${clinicMemberships.clinicId}
+              and ${practitioners.userId} = ${clinicMemberships.userId}
+              and ${practitioners.status} = 'ACTIVE')`,
         })
         .from(clinicMemberships)
         .innerJoin(users, eq(users.id, clinicMemberships.userId))
@@ -327,6 +333,7 @@ export function createAuthService(deps: AuthServiceDeps) {
           userId: row.user.id,
           clinicId: session.clinicId,
           role,
+          isPractitioner: row.isPractitioner,
           sessionId: session.id,
         },
         user: {

@@ -223,7 +223,7 @@ describe('navigation', () => {
 
   it('recherche rapide : résultats du serveur, ouverture de la fiche', async () => {
     const calls = setup(me('SECRETARY'), [alpha, bravo], {
-      'GET /api/patients': () => ({
+      'POST /api/patients/search': () => ({
         status: 200,
         body: {
           // Champs superflus de la fiche ignorés par le schéma de la liste.
@@ -242,9 +242,12 @@ describe('navigation', () => {
     const search = screen.getByRole('searchbox', { name: 'Rechercher un patient' });
     fireEvent.change(search, { target: { value: '0612' } });
     const results = await screen.findByRole('list', { name: 'Patients trouvés' });
-    expect(calls.find((c) => c.url.startsWith('/api/patients?'))?.url).toBe(
-      '/api/patients?q=0612&status=ACTIVE&limit=6',
-    );
+    const query = calls.find((c) => c.url === '/api/patients/search');
+    expect([query?.method, query?.body]).toEqual([
+      'POST',
+      { q: '0612', status: 'ACTIVE', limit: 6 },
+    ]);
+    expect(calls.filter((c) => c.url.includes('0612'))).toEqual([]);
     fireEvent.click(within(results).getByRole('link', { name: /DUPONT Léa/ }));
     expect(await screen.findByRole('heading', { name: 'DUPONT Léa' })).toBeInTheDocument();
     expect(search).toHaveValue('');

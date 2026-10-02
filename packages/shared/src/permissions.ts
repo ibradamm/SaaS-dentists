@@ -39,7 +39,19 @@ export const ROLE_LABELS: Record<Role, string> = {
   SECRETARY: 'Secrétaire',
 };
 
-const ADMIN_PERMISSIONS: readonly Permission[] = PERMISSIONS;
+/**
+ * Notes médicales (écart E18, choix le plus restrictif retenu pour le MVP) : rôle Dentiste, ou
+ * administrateur lui-même praticien actif du cabinet (compte lié à un praticien, `hasPermission`).
+ * Le rôle Administrateur seul n'y donne pas accès ; la secrétaire n'y a jamais accès.
+ */
+export const MEDICAL_PERMISSIONS: readonly Permission[] = [
+  'patient.medical.read',
+  'patient.medical.write',
+];
+
+const ADMIN_PERMISSIONS: readonly Permission[] = PERMISSIONS.filter(
+  (p) => !MEDICAL_PERMISSIONS.includes(p),
+);
 
 const DENTIST_PERMISSIONS: readonly Permission[] = [
   'appointment.read',
@@ -73,12 +85,30 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, ReadonlySet<Permission>>> =
   SECRETARY: new Set(SECRETARY_PERMISSIONS),
 };
 
+/** Matrice des rôles seule, sans la qualité de praticien : voir `hasPermission`. */
 export function roleHasPermission(role: Role, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role].has(permission);
 }
 
-export function permissionsOf(role: Role): Permission[] {
-  return PERMISSIONS.filter((p) => ROLE_PERMISSIONS[role].has(p));
+/** Qui agit dans un cabinet : son rôle, et si son compte est lié à un praticien actif. */
+export interface PermissionHolder {
+  role: Role;
+  isPractitioner: boolean;
+}
+
+/**
+ * Permission effective : celles du rôle, plus les notes médicales pour un administrateur
+ * praticien. Seule fonction à utiliser pour décider d'un accès (serveur et interface).
+ */
+export function hasPermission(holder: PermissionHolder, permission: Permission): boolean {
+  if (ROLE_PERMISSIONS[holder.role].has(permission)) return true;
+  return (
+    holder.role === 'ADMIN' && holder.isPractitioner && MEDICAL_PERMISSIONS.includes(permission)
+  );
+}
+
+export function permissionsOf(holder: PermissionHolder): Permission[] {
+  return PERMISSIONS.filter((p) => hasPermission(holder, p));
 }
 
 /** Rôles pour lesquels la double authentification est obligatoire. */

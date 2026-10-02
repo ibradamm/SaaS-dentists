@@ -79,7 +79,7 @@ export function authRoutes(
       clinic: session.clinic,
       role: session.actor.role,
       // Pendant une étape d'authentification, aucune permission n'est effective.
-      permissions: session.restriction ? [] : permissionsOf(session.actor.role),
+      permissions: session.restriction ? [] : permissionsOf(session.actor),
       restriction: session.restriction,
       csrfToken: session.csrfToken,
     });

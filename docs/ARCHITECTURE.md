@@ -87,7 +87,7 @@ Règles :
 | Authentification | `POST /api/auth/login`, `/logout`, `/password`, `/mfa/setup`, `/mfa/activate`, `/mfa/verify` ; `GET /api/auth/me`, `/csrf` | Fait |
 | Utilisateurs | `GET/POST /api/users`, `PATCH /api/users/:id`, `POST /api/users/:id/reset-password`, `/reset-mfa` | Fait |
 | Cabinet | `GET/PATCH /api/clinic` (nom, fuseau, langue, coordonnées) | Fait |
-| Patients | `GET/POST /api/patients`, `GET/PATCH /api/patients/:id`, archivage, contacts, notes médicales, doublons | Fait |
+| Patients | `POST /api/patients` (création), `POST /api/patients/search` et `POST /api/patients/duplicates` (texte cherché dans le corps, écart E19), `GET/PATCH /api/patients/:id`, archivage, contacts, notes médicales, doublons | Fait |
 | Import | `GET/POST /api/imports`, lignes, rapport, validation, annulation, abandon | Fait |
 | Praticiens et disponibilités | `GET/POST /api/practitioners`, `PATCH /:id`, archivage ; `GET/POST /api/appointment-types`, `PATCH /:id`, archivage ; `GET/PUT /api/practitioners/:id/schedules`, `DELETE …/schedules/:periodId` ; `GET/POST /api/availability-blocks`, `PUT/DELETE /:id` ; `GET /api/availability?from&to&practitionerId` | Fait (ADR 0006) |
 | Rendez-vous | `GET /api/appointments?from&to&practitionerId&includeCancelled`, `GET /api/appointments/:id`, `POST /api/appointments` (confirmation explicite `allowOutsideAvailability`), `PATCH /:id` (déplacement, version), `POST /:id/status` (honoré, patient absent, annulé, correction) ; `GET /api/patients/:id/appointments` ; `GET /api/availability/slots` ; conflits renvoyés par les écritures d'horaires et d'indisponibilités | Fait (ADR 0007) |
@@ -213,12 +213,14 @@ Le catalogue et la matrice sont définis dans le code (`packages/shared/src/perm
 | `schedule.manage_own` (ses horaires et blocages) | ✓ | ✓ | — |
 | `schedule.manage_any` (tout praticien) | ✓ | — | ✓ |
 | `patient.read`, `patient.write` | ✓ | ✓ | ✓ |
-| `patient.medical.read`, `patient.medical.write` | ✓ | ✓ | — |
+| `patient.medical.read`, `patient.medical.write` | praticien seulement¹ | ✓ | — |
 | `payment.read`, `payment.write` | ✓ | ✓ | ✓ |
 | `payment.void` | ✓ | ✓ | — |
 | `finance.reports.read` | ✓ | ✓ | — |
 | `clinic.settings.manage`, `user.manage`, `audit.read` | ✓ | — | — |
 | `data.import` | ✓ | — | — |
+
+¹ Écart E18, choix le plus restrictif retenu pour le MVP (2026-10-02) : un administrateur ne lit et n'écrit les notes médicales que si son compte est lié à un praticien **actif** du cabinet (`hasPermission`). Le lien est posé par un administrateur et tracé dans l'audit (`practitioner.created`, `practitioner.updated`). Un administrateur non soignant n'y a pas accès.
 
 Double authentification obligatoire pour ADMIN et DENTIST.
 

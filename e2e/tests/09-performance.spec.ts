@@ -225,7 +225,11 @@ test('charge : 20 postes simultanés pendant 30 secondes, aucune erreur serveur'
       );
       await call(
         'recherche de patient',
-        () => ctx.get(`/api/patients?q=patient${Math.floor(Math.random() * 5000) + 1}`),
+        () =>
+          ctx.post('/api/patients/search', {
+            headers,
+            data: { q: `patient${Math.floor(Math.random() * 5000) + 1}` },
+          }),
         [200],
       );
       const patientId = rand(meta!.patients);

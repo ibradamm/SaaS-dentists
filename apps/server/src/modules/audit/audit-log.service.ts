@@ -1,6 +1,6 @@
 import {
   auditLogQuerySchema,
-  roleHasPermission,
+  hasPermission,
   type AuditActorsResponse,
   type AuditLogEntry,
   type AuditLogResponse,
@@ -52,7 +52,7 @@ export function createAuditLogService(deps: { db: Database }) {
     rows: readonly Row[],
   ): Promise<Map<string, Entity>> {
     const clinicId = actor.clinicId;
-    const may = (p: Parameters<typeof roleHasPermission>[1]) => roleHasPermission(actor.role, p);
+    const may = (p: Parameters<typeof hasPermission>[1]) => hasPermission(actor, p);
     const out = new Map<string, Entity>();
     const set = (id: string, label: string | null, patientId: string | null = null) =>
       out.set(id, { label, patientId });

@@ -108,7 +108,7 @@ describe('remontée des erreurs : ce qui part vers Sentry', () => {
     });
     const json = { 'content-type': 'application/json' };
     const ok4xx = [
-      await app.inject({ method: 'GET', url: '/api/patients' }), // 401 (erreur métier)
+      await app.inject({ method: 'GET', url: '/api/users' }), // 401 (erreur métier)
       await app.inject({ method: 'GET', url: '/inexistant' }), // 404
       // Refus de Fastify lui-même (branche 4xx du gestionnaire d'erreurs).
       await app.inject({ method: 'POST', url: '/api/auth/login', headers: json, payload: '{x' }),

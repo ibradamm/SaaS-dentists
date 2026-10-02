@@ -59,7 +59,7 @@ Cette forme de `railway ssh` (commande passée en argument) **n'a pas été vér
 ## 3. Ce que la purge ne supprime pas
 
 - **Sauvegardes et restauration à un instant donné** : elles expirent seules (section 4).
-- **Journaux de l'hébergeur** : adresses IP des postes, navigateur et chemins des requêtes, 7 ou 30 jours selon l'offre. Le texte des recherches de patients y figure peut-être (écart E19, NON VÉRIFIÉ).
+- **Journaux de l'hébergeur** : adresses IP des postes, navigateur et chemins des requêtes, 7 ou 30 jours selon l'offre. Depuis la correction de l'écart E19, aucune adresse ne contient de texte de recherche ni de nom de patient (recherches en POST).
 - **Sentry** : erreurs sans donnée personnelle par conception.
 - **Registre d'exploitation** : aucune donnée patient.
 - **Fichiers d'export** : supprimés à la remise (étape 4).

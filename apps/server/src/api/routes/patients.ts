@@ -3,11 +3,11 @@ import {
   createMedicalNoteRequestSchema,
   createPatientRequestSchema,
   duplicateCandidatesResponseSchema,
-  duplicateQuerySchema,
+  duplicateCheckRequestSchema,
   listMedicalNotesResponseSchema,
-  listPatientsQuerySchema,
   listPatientsResponseSchema,
   patientDetailSchema,
+  searchPatientsRequestSchema,
   updateContactRequestSchema,
   updatePatientRequestSchema,
   versionRequestSchema,
@@ -25,17 +25,18 @@ const write = { access: { permission: 'patient.write' } } as const;
 export function patientsRoutes(app: FastifyInstance, deps: { patients: PatientsService }) {
   const { patients } = deps;
 
-  app.get('/api/patients', { config: read }, async (request) =>
+  // Lectures en POST : le texte cherché reste hors de l'adresse journalisée (écart E19).
+  app.post('/api/patients/search', { config: read }, async (request) =>
     listPatientsResponseSchema.parse(
-      await patients.list(actorOf(request), listPatientsQuerySchema.parse(request.query)),
+      await patients.list(actorOf(request), searchPatientsRequestSchema.parse(request.body)),
     ),
   );
 
-  app.get('/api/patients/duplicates', { config: read }, async (request) =>
+  app.post('/api/patients/duplicates', { config: read }, async (request) =>
     duplicateCandidatesResponseSchema.parse({
       candidates: await patients.duplicates(
         actorOf(request),
-        duplicateQuerySchema.parse(request.query),
+        duplicateCheckRequestSchema.parse(request.body),
       ),
     }),
   );

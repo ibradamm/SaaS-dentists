@@ -73,7 +73,9 @@ export function PatientQuickSearch({ onNavigate }: { onNavigate?: () => void }) 
           )}
           {results.data && results.data.total > results.data.patients.length && (
             <Link
-              to={`/patients?q=${encodeURIComponent(term)}`}
+              // Terme transmis dans l'état de navigation, pas dans l'adresse (écart E19).
+              to="/patients"
+              state={{ q: term }}
               onClick={done}
               className="flex min-h-11 items-center rounded px-2 text-sm text-sky-800 underline"
             >

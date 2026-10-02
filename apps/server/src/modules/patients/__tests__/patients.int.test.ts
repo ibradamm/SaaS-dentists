@@ -245,6 +245,22 @@ describe('dossier patient', () => {
       expect(reads).toHaveLength(1);
     });
 
+    it("l'administrateur : seulement s'il est lui-même praticien (E18)", async () => {
+      const p = await newPatient();
+      const adminId = (await createUser(t.ownerDb, clinic.id, 'ADMIN')).id;
+      const admin = actorFor(adminId, 'ADMIN', clinic.id);
+      await expect(service.listMedicalNotes(admin, p.id, META)).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      await expect(service.addMedicalNote(admin, p.id, 'x', META)).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      const practitionerAdmin = actorFor(adminId, 'ADMIN', clinic.id, true);
+      await service.addMedicalNote(practitionerAdmin, p.id, 'Contrôle dans six mois', META);
+      const notes = await service.listMedicalNotes(practitionerAdmin, p.id, META);
+      expect(notes.map((n) => n.content)).toEqual(['Contrôle dans six mois']);
+    });
+
     it('la secrétaire ne peut ni lire ni écrire de note médicale', async () => {
       const p = await newPatient();
       await expect(service.listMedicalNotes(secretary, p.id, META)).rejects.toMatchObject({

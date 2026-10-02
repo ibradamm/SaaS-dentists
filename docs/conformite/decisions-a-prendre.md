@@ -99,6 +99,8 @@
 
 ### E18 — Le rôle Administrateur lit les notes médicales *(trouvé lors de cette relecture)*
 
+> **Décidé et appliqué le 2026-10-02 (choix le plus restrictif pour le MVP)** : notes réservées au rôle Dentiste et à l'administrateur dont le compte est lié à un praticien **actif** du cabinet. La secrétaire et l'administrateur non soignant n'y ont pas accès. La question 9 au juriste reste ouverte.
+
 - **En clair :** l'administrateur du cabinet a toutes les permissions, dont la lecture et l'écriture des notes médicales (`packages/shared/src/permissions.ts`). Nos documents précédents disaient « réservées au dentiste » : c'était **faux**, ils sont corrigés.
 - **Risque :** moyen si l'administrateur n'est pas soignant (gérant, assistant). Il lit des notes de santé.
 - **Obligation juridique :**
@@ -113,6 +115,8 @@
 - **Juriste :** **oui**. Un administrateur non soignant peut-il lire les notes médicales ?
 
 ### E19 — Journaux HTTP de l'hébergeur *(trouvé lors de cette relecture)*
+
+> **Corrigé le 2026-10-02** : `POST /api/patients/search` et `POST /api/patients/duplicates`, texte dans le corps ; la recherche rapide passe le terme à la page Patients par l'état de navigation. Tests : HTTP (anciennes formes GET refusées, journaux sans le texte), interface, et parcours de bout en bout (aucune adresse demandée ne contient un nom saisi).
 
 - **En clair :** le proxy de Railway journalise chaque requête : adresse IP, navigateur, chemin (DOC. FOURNISSEUR LUE). Notre recherche de patients passe le texte cherché dans l'adresse (`?q=…`). Si Railway enregistre cette partie de l'adresse (**NON VÉRIFIÉ**, question posée), des noms de patients seraient dans ses journaux pendant 7 à 30 jours. Nous avions supprimé le journal d'accès de Caddy précisément pour cette raison.
 - **Risque :** moyen à élevé si c'est le cas. Des données de santé (« X est patient du cabinet ») finiraient dans des journaux d'un tiers, hors de notre contrôle.

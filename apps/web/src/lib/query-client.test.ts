@@ -35,7 +35,7 @@ describe('cache des requêtes et sessions', () => {
     mockApi({
       'GET /api/auth/me': () =>
         expired ? unauthenticated : { status: 200, body: me('SECRETARY') },
-      'GET /api/patients': () => {
+      'POST /api/patients/search': () => {
         expired = true;
         return unauthenticated;
       },

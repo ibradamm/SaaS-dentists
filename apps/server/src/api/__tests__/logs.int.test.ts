@@ -113,6 +113,7 @@ describe('journaux applicatifs : parcours complet sans donnée saisie', () => {
     };
     try {
       const admin = await signedIn('ADMIN');
+      const dentist = await signedIn('DENTIST');
       const secretary = await signedIn('SECRETARY');
       const practitionerId = (
         await admin.post('/api/practitioners', { displayName: 'Dr Journal', color: '#0ea5e9' })
@@ -135,15 +136,17 @@ describe('journaux applicatifs : parcours complet sans donnée saisie', () => {
       });
       expect(created.statusCode).toBe(201);
       const patientId = created.json<{ id: string }>().id;
-      expect((await secretary.get('/api/patients?q=Zorglubnom')).statusCode).toBe(200);
+      expect((await secretary.post('/api/patients/search', { q: 'Zorglubnom' })).statusCode).toBe(
+        200,
+      );
       expect(
         (
-          await admin.post(`/api/patients/${patientId}/medical-notes`, {
+          await dentist.post(`/api/patients/${patientId}/medical-notes`, {
             content: 'Zorglubmedical allergie',
           })
         ).statusCode,
       ).toBe(204);
-      expect((await admin.get(`/api/patients/${patientId}/medical-notes`)).statusCode).toBe(200);
+      expect((await dentist.get(`/api/patients/${patientId}/medical-notes`)).statusCode).toBe(200);
       const appointment = await secretary.post('/api/appointments', {
         practitionerId,
         patientId,

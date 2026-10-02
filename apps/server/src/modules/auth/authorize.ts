@@ -1,4 +1,4 @@
-import { roleHasPermission, type Permission } from '@dental/shared';
+import { hasPermission, type Permission } from '@dental/shared';
 import { AppError } from '../../lib/errors';
 import type { UserActor } from './auth.types';
 
@@ -7,14 +7,14 @@ import type { UserActor } from './auth.types';
  * futurs points d'entrée) : l'interface masque les actions non permises, le serveur les refuse.
  */
 export function authorize(actor: UserActor, permission: Permission): void {
-  if (!roleHasPermission(actor.role, permission)) {
+  if (!hasPermission(actor, permission)) {
     throw new AppError('FORBIDDEN', "Vous n'avez pas les droits pour cette action", 403);
   }
 }
 
 /** Au moins une des permissions (ex. gérer son propre agenda ou celui de tout praticien). */
 export function authorizeAny(actor: UserActor, permissions: readonly Permission[]): void {
-  if (!permissions.some((p) => roleHasPermission(actor.role, p))) {
+  if (!permissions.some((p) => hasPermission(actor, p))) {
     throw new AppError('FORBIDDEN', "Vous n'avez pas les droits pour cette action", 403);
   }
 }

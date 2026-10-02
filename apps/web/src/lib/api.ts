@@ -45,7 +45,9 @@ import {
   type ContactInput,
   type CreateImportRequest,
   type CreatePatientRequest,
+  type DuplicateCheckRequest,
   type ImportRowInput,
+  type SearchPatientsRequest,
   type UpdateContactRequest,
   type UpdatePatientRequest,
   apiErrorSchema,
@@ -330,22 +332,13 @@ export const api = {
       (r) => r.payments,
     ),
 
-  listPatients: (query: {
-    q?: string;
-    status?: 'ACTIVE' | 'ARCHIVED';
-    limit?: number;
-    offset?: number;
-  }) => request('GET', `/api/patients?${toQuery(query)}`, listPatientsResponseSchema),
-  duplicatePatients: (query: {
-    lastName: string;
-    firstName: string;
-    birthDate?: string | undefined;
-  }) =>
-    request(
-      'GET',
-      `/api/patients/duplicates?${toQuery(query)}`,
-      duplicateCandidatesResponseSchema,
-    ).then((r) => r.candidates),
+  // Texte cherché dans le corps, jamais dans l'adresse (écart E19).
+  listPatients: (body: SearchPatientsRequest) =>
+    request('POST', '/api/patients/search', listPatientsResponseSchema, body),
+  duplicatePatients: (body: DuplicateCheckRequest) =>
+    request('POST', '/api/patients/duplicates', duplicateCandidatesResponseSchema, body).then(
+      (r) => r.candidates,
+    ),
   getPatient: (id: string) => request('GET', `/api/patients/${id}`, patientDetailSchema),
   createPatient: (body: CreatePatientRequest) =>
     request('POST', '/api/patients', patientDetailSchema, body),
