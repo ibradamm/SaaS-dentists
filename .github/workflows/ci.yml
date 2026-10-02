@@ -1,0 +1,251 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Qualité, tests et build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Base PostgreSQL éphémère du job : ces mots de passe ne protègent rien de réel.
+      TEST_DATABASE_ADMIN_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      DATABASE_OWNER_PASSWORD: ci-owner-password-not-a-secret
+      DATABASE_APP_PASSWORD: ci-app-password-not-a-secret
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Formatage
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: Typage
+        run: pnpm typecheck
+      - name: Schéma Drizzle et migrations synchronisés
+        run: |
+          pnpm --filter @dental/server db:generate
+          if [ -n "$(git status --porcelain -- apps/server/src/db/migrations)" ]; then
+            echo "::error::Le schéma a changé sans migration committée : lancer pnpm --filter @dental/server db:generate"
+            git status --porcelain -- apps/server/src/db/migrations
+            exit 1
+          fi
+      - name: Tests (unitaires et intégration PostgreSQL)
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+      - name: Budget du chargement initial de l'interface
+        run: pnpm check:bundle
+
+  e2e:
+    name: Parcours de bout en bout (Chromium, pile de production)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Base PostgreSQL éphémère du job : ces mots de passe ne protègent rien de réel.
+      TEST_DATABASE_ADMIN_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      DATABASE_OWNER_PASSWORD: ci-owner-password-not-a-secret
+      DATABASE_APP_PASSWORD: ci-app-password-not-a-secret
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build de production (API, worker, commandes, interface)
+        run: pnpm build
+      - name: Chromium de la version de Playwright figée
+        run: pnpm --filter @dental/e2e exec playwright install --with-deps chromium
+      - name: Parcours de bout en bout
+        run: pnpm --filter @dental/e2e e2e
+      - name: Rapport, traces et journaux (données fictives uniquement)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: e2e/artifacts
+          retention-days: 7
+          if-no-files-found: ignore
+
+  staging-local:
+    name: Pile staging locale (images de production, HTTPS, check:deployment)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      COMPOSE: docker compose -f infra/staging-local/compose.yml
+      NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/infra/staging-local/.certs/ca.pem
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Secrets éphémères du job (masqués, jamais affichés)
+        run: |
+          secret() { node -e "process.stdout.write(require('crypto').randomBytes($1).toString('$2'))"; }
+          for name in PG_ADMIN_PASSWORD DATABASE_OWNER_PASSWORD DATABASE_APP_PASSWORD; do
+            value=$(secret 24 base64url); echo "::add-mask::$value"; echo "$name=$value" >> "$GITHUB_ENV"
+          done
+          key=$(secret 32 base64); echo "::add-mask::$key"; echo "DATA_ENCRYPTION_KEY=$key" >> "$GITHUB_ENV"
+      - name: Autorité et certificat de test
+        run: bash infra/staging-local/certs.sh infra/staging-local/.certs
+      - name: Images de production et pile (proxy de périmètre, Caddy, API, worker, PostgreSQL)
+        run: $COMPOSE up -d --build
+      - name: Pile prête (HTTPS par le proxy de périmètre)
+        run: |
+          for i in $(seq 1 90); do
+            # curl ne lit pas NODE_EXTRA_CA_CERTS (Node seulement) : autorité de test explicite.
+            code=$(curl -s -o /dev/null -w '%{http_code}' --cacert "$NODE_EXTRA_CA_CERTS" https://localhost/api/auth/me || true)
+            [ "$code" = 401 ] && exit 0
+            sleep 2
+          done
+          $COMPOSE ps -a; $COMPOSE logs --no-color; exit 1
+      - name: Cabinet marocain et administrateur de test (commandes de production)
+        run: |
+          clinic=$($COMPOSE run --rm --no-deps -T migrate node dist/create-clinic.js --name "Cabinet Test Casablanca" --timezone Africa/Casablanca --locale fr-MA --currency MAD --country MA | sed -n 's/Cabinet créé : //p')
+          password=$($COMPOSE run --rm --no-deps -T migrate node dist/create-admin.js --clinic "$clinic" --email admin.test@exemple.invalid --name "Admin Test" | sed -n 's/.*affiché une seule fois) : //p')
+          test -n "$password"
+          echo "::add-mask::$password"
+          echo "ADMIN_TEMPORARY_PASSWORD=$password" >> "$GITHUB_ENV"
+      - name: Comptes de test par l'API publique
+        run: pnpm --filter @dental/e2e staging:accounts --url https://localhost --admin-email admin.test@exemple.invalid --out "$RUNNER_TEMP/accounts.json"
+      - name: check:deployment (10 contrôles, aucun ignoré)
+        # bash explicite : pipefail, sinon « | tee » masquerait un échec.
+        shell: bash
+        run: |
+          # Poste vu par le proxy de périmètre : passerelle du réseau de la pile (compose.yml).
+          pnpm --filter @dental/e2e check:deployment --url https://localhost --accounts "$RUNNER_TEMP/accounts.json" --rate-limit --expect-ip 172.28.0.1 | tee "$RUNNER_TEMP/check.txt"
+          if grep -q '^IGNORÉ' "$RUNNER_TEMP/check.txt"; then echo "::error::contrôle ignoré"; exit 1; fi
+      - name: Fin de contrat avec les commandes de production (export, revue, suspension, purge)
+        # docs/operations/fin-de-contrat.md. L'export (données fictives) reste dans un fichier
+        # du runner, jamais dans le journal du job.
+        shell: bash
+        run: |
+          name="Cabinet Test Résiliation"
+          clinic=$($COMPOSE run --rm --no-deps -T migrate node dist/create-clinic.js --name "$name" --timezone Africa/Casablanca --locale fr-MA --currency MAD --country MA | sed -n 's/Cabinet créé : //p')
+          $COMPOSE run --rm --no-deps -T api node dist/export-clinic.js --clinic "$clinic" --out - > "$RUNNER_TEMP/export.json"
+          node -e "const e = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); if (e.format !== 'dental-export/1' || e.counts.clinics !== 1) process.exit(1)" "$RUNNER_TEMP/export.json"
+          $COMPOSE run --rm --no-deps -T api node dist/retention-report.js | grep -q 'Aucune suppression'
+          purge() { $COMPOSE run --rm --no-deps -T bootstrap node dist/purge-clinic.js --clinic "$clinic" --confirm "$name" "$@"; }
+          if purge --execute; then echo "::error::purge acceptée pour un cabinet actif"; exit 1; fi
+          $COMPOSE run --rm --no-deps -T migrate node dist/clinic-lifecycle.js --clinic "$clinic" --action suspend
+          purge --execute
+          if purge; then echo "::error::cabinet encore présent après la purge"; exit 1; fi
+      - name: Journaux des conteneurs sans secret ni jeton
+        run: |
+          $COMPOSE logs --no-color > "$RUNNER_TEMP/logs.txt"
+          for value in "$PG_ADMIN_PASSWORD" "$DATABASE_OWNER_PASSWORD" "$DATABASE_APP_PASSWORD" "$DATA_ENCRYPTION_KEY" "$ADMIN_TEMPORARY_PASSWORD"; do
+            if grep -qF -- "$value" "$RUNNER_TEMP/logs.txt"; then echo "::error::secret dans les journaux"; exit 1; fi
+          done
+          if grep -qiE 'dental_session=|"cookie":|"authorization":|x-csrf-token' "$RUNNER_TEMP/logs.txt"; then
+            echo "::error::jeton de session dans les journaux"; exit 1
+          fi
+          echo "$(wc -l < "$RUNNER_TEMP/logs.txt") lignes de journaux contrôlées"
+      - name: Journaux de la pile en cas d'échec
+        if: failure()
+        run: $COMPOSE ps -a && $COMPOSE logs --no-color --tail 200
+
+  sentry:
+    # Contrôle réel de la remontée vers Sentry (projet dental-staging), à la demande : commit
+    # dont le message commence par [sentry-check]. DSN : secret du dépôt SENTRY_DSN_STAGING,
+    # jamais dans le dépôt (masqué dans les journaux par GitHub). Procédure :
+    # docs/operations/deploiement-staging.md.
+    name: Remontée réelle vers Sentry (staging)
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, '[sentry-check]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: sentry:check (erreur contrôlée, contenu de l'envoi affiché)
+        env:
+          APP_ENV: staging
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN_STAGING }}
+          SENTRY_RELEASE: ${{ github.sha }}
+        run: |
+          if [ -z "$SENTRY_DSN" ]; then echo "::error::secret SENTRY_DSN_STAGING absent"; exit 1; fi
+          pnpm --filter @dental/server sentry:check
+
+  secrets:
+    name: Détection de secrets (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Installer gitleaks (version figée, somme de contrôle vérifiée)
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$archive" "$base/$archive"
+          curl -sSfL -o checksums.txt "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " ${archive}\$" checksums.txt | sha256sum -c -
+          tar -xzf "$archive" gitleaks
+      - name: Analyser tout l'historique
+        run: ./gitleaks git --no-banner --redact --verbose --config .gitleaks.toml .
+
+  dependencies:
+    name: Audit des dépendances de production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      # Pas de cache pnpm : ce job n'installe rien (l'audit lit le lockfile), et un cache
+      # sans magasin pnpm fait échouer l'étape de sauvegarde de setup-node. setup-node v5
+      # active ce cache automatiquement à partir du champ packageManager : désactivation explicite.
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: pnpm audit --prod --audit-level high

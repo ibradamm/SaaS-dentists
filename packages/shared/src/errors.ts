@@ -1,0 +1,52 @@
+import { z } from 'zod';
+import { overrideReasonSchema } from './appointments';
+
+/**
+ * Codes d'erreur exposés par l'API. Le client s'appuie sur le code, jamais sur le message,
+ * qui peut évoluer. Toute nouvelle erreur publique est ajoutée ici.
+ */
+export const ERROR_CODES = [
+  'BAD_REQUEST',
+  'VALIDATION_FAILED',
+  'UNAUTHENTICATED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'CONFLICT',
+  'RATE_LIMITED',
+  'INVALID_CREDENTIALS',
+  'ACCOUNT_LOCKED',
+  'TEMPORARY_PASSWORD_EXPIRED',
+  'CLINIC_SELECTION_REQUIRED',
+  'AUTH_STEP_REQUIRED',
+  'INVALID_MFA_CODE',
+  'CSRF_INVALID',
+  // Rendez-vous (docs/adr/0007).
+  'AVAILABILITY_CONFIRMATION_REQUIRED',
+  'PRACTITIONER_ABSENT',
+  'SLOT_UNAVAILABLE',
+  // Paiements (docs/adr/0009).
+  'AMOUNT_EXCEEDS_REMAINING',
+  'CHARGE_NOT_OPEN',
+  'CHARGE_HAS_PAYMENTS',
+  'SERVICE_UNAVAILABLE',
+  'INTERNAL_ERROR',
+] as const;
+
+export const errorCodeSchema = z.enum(ERROR_CODES);
+export type ErrorCode = z.infer<typeof errorCodeSchema>;
+
+export const apiErrorSchema = z.object({
+  error: z.object({
+    code: errorCodeSchema,
+    message: z.string(),
+    requestId: z.string().optional(),
+    /** `AVAILABILITY_CONFIRMATION_REQUIRED` : raisons à afficher avant la confirmation. */
+    reasons: z.array(overrideReasonSchema).optional(),
+    /**
+     * `CLINIC_SELECTION_REQUIRED` : cabinets actifs du compte, donnés seulement après un mot
+     * de passe correct, pour choisir celui où ouvrir la session.
+     */
+    clinics: z.array(z.object({ id: z.uuid(), name: z.string() })).optional(),
+  }),
+});
+export type ApiError = z.infer<typeof apiErrorSchema>;

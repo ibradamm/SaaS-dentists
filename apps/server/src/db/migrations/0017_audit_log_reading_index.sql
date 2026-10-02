@@ -1,0 +1,2 @@
+DROP INDEX "audit_logs_clinic_created_idx";--> statement-breakpoint
+CREATE INDEX "audit_logs_clinic_created_id_idx" ON "audit_logs" USING btree ("clinic_id","created_at" DESC NULLS FIRST,"id" DESC NULLS FIRST);

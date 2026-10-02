@@ -1,0 +1,6 @@
+# Faux positifs historiques de gitleaks, un par ligne (empreinte commit:fichier:règle:ligne).
+# Chaque entrée doit être justifiée ; un vrai secret ne s'ignore jamais : il se révoque.
+
+# Mot de passe temporaire fictif d'une fixture de test de l'interface (valeur inventée,
+# remplacée depuis par une valeur à faible entropie). Aucun secret réel.
+66112e787999a2554cc6e4b161eff5996f3b4a8c:apps/web/src/app/app.test.tsx:generic-api-key:177

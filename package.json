@@ -1,0 +1,40 @@
+{
+  "name": "dental-platform",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev:db": "bash scripts/dev-postgres.sh start",
+    "db:bootstrap": "pnpm --filter @dental/server db:bootstrap",
+    "db:migrate": "pnpm --filter @dental/server db:migrate",
+    "db:seed": "pnpm --filter @dental/server db:seed",
+    "dev:api": "pnpm --filter @dental/server dev:api",
+    "dev:worker": "pnpm --filter @dental/server dev:worker",
+    "dev:web": "pnpm --filter @dental/web dev",
+    "build": "pnpm -r build",
+    "check:bundle": "pnpm --filter @dental/web check:bundle",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "setup:env": "node scripts/init-env.mjs",
+    "admin:create-clinic": "pnpm --filter @dental/server admin:create-clinic",
+    "admin:create-admin": "pnpm --filter @dental/server admin:create-admin",
+    "admin:reset-mfa": "pnpm --filter @dental/server admin:reset-mfa",
+    "e2e": "pnpm build && pnpm --filter @dental/e2e e2e"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.11.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1"
+  }
+}

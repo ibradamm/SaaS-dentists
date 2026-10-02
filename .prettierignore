@@ -1,0 +1,6 @@
+pnpm-lock.yaml
+dist/
+coverage/
+apps/server/src/db/migrations/meta/
+# Documentation : mise en forme manuelle (tableaux lisibles dans les diffs)
+*.md

@@ -1,0 +1,12 @@
+{
+  "name": "@dental/railway",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "railway": "3.12.0"
+  }
+}

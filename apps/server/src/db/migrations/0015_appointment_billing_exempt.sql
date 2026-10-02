@@ -1,0 +1,1 @@
+ALTER TABLE "appointments" ADD COLUMN "billing_exempt" boolean DEFAULT false NOT NULL;

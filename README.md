@@ -1,0 +1,112 @@
+# Plateforme de gestion de cabinet dentaire
+
+**État : MVP technique terminé (`v0.1.0-mvp`), non déployé.** Ce qui fonctionne, ce qui est repoussé, ce qui bloque la mise en ligne et comment déployer plus tard : [`docs/MVP-STATUS.md`](docs/MVP-STATUS.md).
+
+Périmètre actuel : SaaS de gestion du cabinet pour le personnel (ADR 0004). WhatsApp, l'agent IA et Google Calendar sont des extensions futures (`docs/future/`).
+
+Monorepo TypeScript :
+- API (Fastify) et worker (pg-boss) ;
+- interface web (React) ;
+- base PostgreSQL 16 avec isolation des données par cabinet.
+
+Fonctionnalités disponibles :
+- comptes, rôles (administrateur, dentiste, secrétaire), double authentification ;
+- dossiers patients : recherche, doublons, téléphones, archivage, notes médicales chiffrées, réservées au dentiste et à l'administrateur lui-même praticien du cabinet ;
+- import de patients depuis un fichier CSV ou Excel (menu Patients → « Importer un fichier », administrateur ; voir ADR 0005) ;
+- cabinet (profil, praticiens, types de rendez-vous) et disponibilités par praticien : horaires datés, absences, blocages, dans le fuseau du cabinet (ADR 0006) ;
+- agenda des rendez-vous (menu « Agenda ») : vues jour et semaine, création avec créneaux libres proposés, déplacement, statuts (prévu, honoré, patient absent, annulé), historique sur la fiche patient ; double réservation impossible, y compris en base ; hors horaires, sur un blocage ou dans le passé seulement après confirmation explicite, tracée (ADR 0007, 0008) ;
+- parcours par rôle (ADR 0008) : accueil « Aujourd'hui » (« Ma journée » pour un praticien, journée du cabinet pour le secrétariat, mise en route pour l'administrateur), recherche rapide de patient, création d'un patient pendant la prise de rendez-vous ; interface adaptée à l'ordinateur, à la tablette et au téléphone ;
+- paiements (section « Paiements » de la fiche patient, bouton « Encaisser » d'un rendez-vous) : actes à encaisser, paiements partiels, restant dû, annulations motivées réservées au dentiste et à l'administrateur ; liste « À encaisser » ; revenus encaissés par période pour le dentiste et l'administrateur. Montants en centimes entiers, aucune donnée financière modifiable ni supprimable, double saisie impossible (ADR 0009) ;
+- tableau de bord (ADR 0010) : « À suivre » sur l'accueil (rendez-vous à venir, restant à encaisser, rendez-vous honorés sans acte, encaissé du jour) et page « Statistiques » (jour, semaine, mois, année ou période libre, par praticien) : activité, taux d'occupation du planning, d'absence, de présence et d'annulation, patients, revenus et leur évolution. Tout est calculé par le serveur, selon les permissions de chacun ;
+- journal d'audit (menu « Journal », administrateur ; ADR 0011) : qui a fait quoi, quand, sur quel élément, filtré par période, utilisateur, action ou élément ; ni contenu de note ni information saisie. Remontée des erreurs vers Sentry facultative (`SENTRY_DSN`), sans aucune donnée saisie ; purge nocturne des sessions terminées et des brouillons d'import.
+
+Architecture et décisions : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/adr/`](docs/adr). Avancement : [`docs/phases/`](docs/phases).
+
+## Prérequis
+
+- Node.js 22.23.3 exactement (`.nvmrc`, mêmes données de fuseau que les images Docker), pnpm 10 (`corepack enable`)
+- PostgreSQL 16, au choix :
+  - Docker : `docker compose -f infra/docker-compose.yml up -d`
+  - sans Docker, binaires PostgreSQL installés : `pnpm dev:db` (cluster local dans `.data/pg`)
+
+## Démarrage
+
+```bash
+pnpm install
+pnpm setup:env            # crée .env (valeurs locales + clé de chiffrement générée)
+pnpm db:bootstrap         # rôles dental_owner / dental_app et base (une fois)
+pnpm db:migrate           # migrations + schéma de la file de tâches
+pnpm db:seed              # cabinet de démonstration + 3 comptes (mots de passe temporaires affichés)
+
+pnpm dev:api              # http://127.0.0.1:3000/health/ready
+pnpm dev:worker
+pnpm dev:web              # http://127.0.0.1:5173
+```
+
+Première connexion d'un compte :
+1. mot de passe temporaire ;
+2. choix d'un mot de passe personnel ;
+3. pour les administrateurs et les dentistes, mise en place de la double authentification (application TOTP).
+
+## Administration (tous environnements, rôle propriétaire)
+
+```bash
+pnpm admin:create-clinic --name "Cabinet X" --timezone Europe/Paris --locale fr-FR --currency EUR --country FR
+pnpm admin:create-admin --clinic <id> --email admin@cabinet.fr --name "Nom Prénom"
+pnpm admin:reset-mfa --email admin@cabinet.fr   # perte du téléphone du seul administrateur
+```
+
+## Vérifications (identiques à la CI)
+
+```bash
+pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check:bundle
+```
+
+- Les tests d'intégration créent une base jetable, y appliquent toutes les migrations et se connectent avec le rôle applicatif réel (RLS active).
+- Ils ont besoin de `TEST_DATABASE_ADMIN_URL`, `DATABASE_OWNER_PASSWORD` et `DATABASE_APP_PASSWORD`, lus depuis `.env`.
+- Attention : les rôles PostgreSQL sont communs à tout le cluster. Le bootstrap (y compris celui des tests) réaffirme leurs mots de passe. Lancer les tests avec d'autres mots de passe que ceux du `.env` modifie donc aussi ceux de la base de développement du même cluster.
+
+## Parcours de bout en bout (Playwright)
+
+```bash
+pnpm e2e                  # build de production, puis les 56 parcours (environ 5 minutes)
+pnpm --filter @dental/e2e exec playwright show-report artifacts/report
+```
+
+- La pile est démarrée par Playwright :
+  - base `dental_e2e` recréée ;
+  - migrations, API, worker et interface compilés ;
+  - cabinets créés par les commandes d'administration.
+- Prérequis :
+  - le `.env` de `pnpm setup:env` (`TEST_DATABASE_ADMIN_URL`, mots de passe des rôles) ;
+  - Chromium de la version figée de Playwright (`pnpm --filter @dental/e2e exec playwright install chromium`, sauf s'il est déjà fourni par l'environnement).
+- Ce qui est couvert (rôles, concurrence, réseau, changement d'heure, accessibilité, charge, restauration) et les chiffres mesurés : `docs/phases/phase-10.md` ; démonstration pas à pas : `docs/demo.md` ; règles : ADR 0012.
+
+Vérification d'un environnement hébergé (staging, puis production), par de vraies requêtes HTTP : `pnpm --filter @dental/e2e check:deployment --url https://… --accounts comptes.json --rate-limit --expect-ip <adresse du poste>` (comptes synthétiques créés par `staging:accounts`). Audit pré-production et état de chaque contrôle : `docs/phases/phase-11-audit-preproduction.md`.
+
+## Déploiement
+
+- Images : `infra/docker/` (serveur, interface avec Caddy). Pile staging locale en HTTPS, exécutée en CI : `infra/staging-local/compose.yml`.
+- Staging Railway (Infrastructure as Code) : `.railway/railway.ts`. Procédure, coûts et vérifications : `docs/operations/deploiement-staging.md`. Sauvegardes : `docs/operations/sauvegarde-restauration.md`. Décisions : ADR 0013.
+- **État : prêt, non déployé** (aucun budget d'hébergement accordé ; blocages externes : [`docs/MVP-STATUS.md`](docs/MVP-STATUS.md)).
+
+## Structure
+
+```
+apps/server     API, worker, accès aux données, migrations, intégrations
+apps/web        interface (React + Vite + Tailwind)
+packages/shared contrats Zod partagés entre API et interface
+infra/          docker-compose de développement
+scripts/        outils de développement (PostgreSQL local)
+e2e/            parcours de bout en bout (Playwright), charge, restauration
+docs/           architecture, décisions (ADR), rapports de phase, démonstration
+```
+
+## Règles
+
+- Jamais de secret dans le dépôt : `.env` est ignoré par Git et gitleaks tourne en CI.
+- Toute requête métier passe par `withTenant` (`apps/server/src/db/tenant.ts`) et filtre aussi explicitement par `clinic_id`.
+- Toute action protégée appelle `authorize()` dans son service ; la route déclare aussi la permission (`config.access`).
+- Toute table du schéma public reçoit RLS, `FORCE` et une politique ; le test `schema-catalog` l'impose.
+- Une migration appliquée n'est jamais modifiée (voir ADR 0002).
+- Toute nouvelle table liée aux patients doit être prise en compte par l'annulation d'import ; le test `schema-catalog` l'impose.

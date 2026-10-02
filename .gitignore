@@ -1,0 +1,46 @@
+# Dépendances et builds
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# Secrets : ne jamais committer
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.crt
+*.kdbx
+id_rsa*
+id_ed25519*
+*service-account*.json
+credentials*.json
+
+# Données locales (cluster PostgreSQL de dev, sauvegardes)
+.data/
+*.dump
+*.backup
+*.bak
+*.sql.gz
+*.sql.bz2
+tmp/
+
+# Tests E2E
+playwright-report/
+test-results/
+e2e/artifacts/
+
+# Divers
+*.log
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+# Certificats de test de la pile staging locale (infra/staging-local/certs.sh)
+infra/staging-local/.certs/

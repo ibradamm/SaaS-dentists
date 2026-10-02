@@ -1,0 +1,19 @@
+# Proxy de périmètre simulé, pour la pile « staging local » (compose.yml) : fait ce que fait
+# le proxy de l'hébergeur (Railway, docs/operations/deploiement-staging.md) devant le Caddy de
+# l'interface :
+#   - termine TLS (certificat de test, autorité générée par certs.sh) ;
+#   - redirige HTTP vers HTTPS ;
+#   - remplace X-Real-IP par l'adresse vue du client (une valeur fournie par le client est
+#     écrasée).
+# Ce comportement reste à vérifier sur l'hébergement réel : check:deployment --rate-limit.
+{
+	admin off
+	persist_config off
+}
+
+localhost {
+	tls {$EDGE_CERTS:/certs}/cert.pem {$EDGE_CERTS:/certs}/key.pem
+	reverse_proxy {$EDGE_UPSTREAM} {
+		header_up X-Real-IP {remote_host}
+	}
+}
